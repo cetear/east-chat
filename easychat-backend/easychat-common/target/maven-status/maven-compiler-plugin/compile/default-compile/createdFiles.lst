@@ -1,0 +1,7 @@
+com\easychat\common\util\SSEUtil.class
+com\easychat\common\exception\AIException.class
+com\easychat\common\util\TraceIdUtil.class
+com\easychat\common\constant\MessageRole.class
+com\easychat\common\constant\ModelType.class
+com\easychat\common\exception\BusinessException.class
+com\easychat\common\model\Result.class

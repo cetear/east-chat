@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+         http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.easychat</groupId>
+        <artifactId>easychat-parent</artifactId>
+        <version>1.0.0</version>
+    </parent>
+
+    <artifactId>easychat-app</artifactId>
+    <packaging>jar</packaging>
+
+    <name>EasyChat Application</name>
+    <description>Spring Boot application entry point</description>
+
+    <dependencies>
+        <!-- Only depend on API layer, all others are transitive -->
+        <dependency>
+            <groupId>com.easychat</groupId>
+            <artifactId>easychat-api</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter</artifactId>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <configuration>
+                    <mainClass>com.easychat.app.EasyChatApplication</mainClass>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

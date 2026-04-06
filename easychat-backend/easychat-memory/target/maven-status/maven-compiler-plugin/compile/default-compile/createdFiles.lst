@@ -1,0 +1,4 @@
+com\easychat\memory\summary\SummaryService.class
+com\easychat\memory\ConversationMemory.class
+com\easychat\memory\store\DbConversationMemory.class
+com\easychat\memory\summary\impl\SimpleSummaryService.class

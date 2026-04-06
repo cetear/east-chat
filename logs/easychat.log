@@ -1,0 +1,117 @@
+2026-03-03 23:40:10.159 [main] INFO  com.easychat.EasyChatApplication - Starting EasyChatApplication using Java 17.0.4.1 with PID 9224 (D:\AICodeProject\EasyChat\easychat-backend\target\classes started by abc in D:\AICodeProject\EasyChat)
+2026-03-03 23:40:10.174 [main] DEBUG com.easychat.EasyChatApplication - Running with Spring Boot v3.2.0, Spring v6.1.1
+2026-03-03 23:40:10.175 [main] INFO  com.easychat.EasyChatApplication - No active profile set, falling back to 1 default profile: "default"
+2026-03-03 23:40:12.055 [main] INFO  org.springframework.boot.web.embedded.tomcat.TomcatWebServer - Tomcat initialized with port 8080 (http)
+2026-03-03 23:40:12.070 [main] INFO  org.apache.coyote.http11.Http11NioProtocol - Initializing ProtocolHandler ["http-nio-8080"]
+2026-03-03 23:40:12.073 [main] INFO  org.apache.catalina.core.StandardService - Starting service [Tomcat]
+2026-03-03 23:40:12.074 [main] INFO  org.apache.catalina.core.StandardEngine - Starting Servlet engine: [Apache Tomcat/10.1.16]
+2026-03-03 23:40:12.185 [main] INFO  org.apache.catalina.core.ContainerBase.[Tomcat].[localhost].[/] - Initializing Spring embedded WebApplicationContext
+2026-03-03 23:40:12.189 [main] INFO  org.springframework.boot.web.servlet.context.ServletWebServerApplicationContext - Root WebApplicationContext: initialization completed in 1948 ms
+2026-03-03 23:40:14.500 [main] INFO  org.apache.coyote.http11.Http11NioProtocol - Starting ProtocolHandler ["http-nio-8080"]
+2026-03-03 23:40:14.554 [main] INFO  org.springframework.boot.web.embedded.tomcat.TomcatWebServer - Tomcat started on port 8080 (http) with context path ''
+2026-03-03 23:40:14.568 [main] INFO  com.easychat.EasyChatApplication - Started EasyChatApplication in 4.894 seconds (process running for 6.192)
+2026-03-03 23:42:00.471 [main] INFO  com.easychat.EasyChatApplication - Starting EasyChatApplication using Java 17.0.4.1 with PID 30340 (D:\AICodeProject\EasyChat\easychat-backend\target\classes started by abc in D:\AICodeProject\EasyChat)
+2026-03-03 23:42:00.484 [main] DEBUG com.easychat.EasyChatApplication - Running with Spring Boot v3.2.0, Spring v6.1.1
+2026-03-03 23:42:00.486 [main] INFO  com.easychat.EasyChatApplication - No active profile set, falling back to 1 default profile: "default"
+2026-03-03 23:42:02.194 [main] INFO  org.springframework.boot.web.embedded.tomcat.TomcatWebServer - Tomcat initialized with port 8080 (http)
+2026-03-03 23:42:02.207 [main] INFO  org.apache.coyote.http11.Http11NioProtocol - Initializing ProtocolHandler ["http-nio-8080"]
+2026-03-03 23:42:02.211 [main] INFO  org.apache.catalina.core.StandardService - Starting service [Tomcat]
+2026-03-03 23:42:02.218 [main] INFO  org.apache.catalina.core.StandardEngine - Starting Servlet engine: [Apache Tomcat/10.1.16]
+2026-03-03 23:42:02.377 [main] INFO  org.apache.catalina.core.ContainerBase.[Tomcat].[localhost].[/] - Initializing Spring embedded WebApplicationContext
+2026-03-03 23:42:02.380 [main] INFO  org.springframework.boot.web.servlet.context.ServletWebServerApplicationContext - Root WebApplicationContext: initialization completed in 1814 ms
+2026-03-03 23:42:04.661 [main] INFO  org.apache.coyote.http11.Http11NioProtocol - Starting ProtocolHandler ["http-nio-8080"]
+2026-03-03 23:42:04.694 [main] INFO  org.springframework.boot.web.embedded.tomcat.TomcatWebServer - Tomcat started on port 8080 (http) with context path ''
+2026-03-03 23:42:04.704 [main] INFO  com.easychat.EasyChatApplication - Started EasyChatApplication in 4.734 seconds (process running for 5.712)
+2026-03-03 23:42:43.835 [http-nio-8080-exec-1] INFO  org.apache.catalina.core.ContainerBase.[Tomcat].[localhost].[/] - Initializing Spring DispatcherServlet 'dispatcherServlet'
+2026-03-03 23:42:43.836 [http-nio-8080-exec-1] INFO  org.springframework.web.servlet.DispatcherServlet - Initializing Servlet 'dispatcherServlet'
+2026-03-03 23:42:43.840 [http-nio-8080-exec-1] INFO  org.springframework.web.servlet.DispatcherServlet - Completed initialization in 3 ms
+2026-03-03 23:42:44.055 [http-nio-8080-exec-1] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Starting...
+2026-03-03 23:42:44.753 [http-nio-8080-exec-1] INFO  com.zaxxer.hikari.pool.HikariPool - HikariPool-1 - Added connection com.mysql.cj.jdbc.ConnectionImpl@3a21e27e
+2026-03-03 23:42:44.755 [http-nio-8080-exec-1] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Start completed.
+2026-03-03 23:42:44.766 [http-nio-8080-exec-1] DEBUG com.easychat.repository.ChatSessionRepository.selectList - ==>  Preparing: SELECT id,session_id,title,model_type,summary,max_rounds,created_at,updated_at FROM chat_session
+2026-03-03 23:42:44.792 [http-nio-8080-exec-1] DEBUG com.easychat.repository.ChatSessionRepository.selectList - ==> Parameters: 
+2026-03-03 23:42:44.860 [http-nio-8080-exec-1] DEBUG com.easychat.repository.ChatSessionRepository.selectList - <==      Total: 0
+2026-03-03 23:42:44.866 [http-nio-8080-exec-5] DEBUG com.easychat.repository.ModelConfigRepository.selectList - ==>  Preparing: SELECT id,model_code,model_name,api_key,base_url,model_name_api,temperature,max_tokens,is_enabled,created_at,updated_at FROM model_config WHERE (model_code = ?)
+2026-03-03 23:42:44.867 [http-nio-8080-exec-5] DEBUG com.easychat.repository.ModelConfigRepository.selectList - ==> Parameters: openai(String)
+2026-03-03 23:42:44.910 [http-nio-8080-exec-5] DEBUG com.easychat.repository.ModelConfigRepository.selectList - <==      Total: 0
+2026-03-03 23:42:44.923 [http-nio-8080-exec-7] DEBUG com.easychat.repository.ChatSessionRepository.insert - ==>  Preparing: INSERT INTO chat_session ( session_id, title, model_type, max_rounds, created_at, updated_at ) VALUES ( ?, ?, ?, ?, ?, ? )
+2026-03-03 23:42:44.925 [http-nio-8080-exec-7] DEBUG com.easychat.repository.ChatSessionRepository.insert - ==> Parameters: 8ae63fc5-a3cd-4f65-9170-23226b12e602(String), 新会话(String), openai(String), 10(Integer), 1772552564915(Long), 1772552564915(Long)
+2026-03-03 23:42:44.916 [http-nio-8080-exec-5] ERROR org.apache.catalina.core.ContainerBase.[Tomcat].[localhost].[/].[dispatcherServlet] - Servlet.service() for servlet [dispatcherServlet] in context with path [] threw exception [Request processing failed: java.lang.RuntimeException: Model config not found: openai] with root cause
+java.lang.RuntimeException: Model config not found: openai
+	at com.easychat.service.impl.ModelConfigServiceImpl.getModelConfig(ModelConfigServiceImpl.java:32) ~[classes/:?]
+	at com.easychat.controller.ChatController.getModelConfig(ChatController.java:144) ~[classes/:?]
+	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke0(Native Method) ~[?:?]
+	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:77) ~[?:?]
+	at java.base/jdk.internal.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43) ~[?:?]
+	at java.base/java.lang.reflect.Method.invoke(Method.java:568) ~[?:?]
+	at org.springframework.web.method.support.InvocableHandlerMethod.doInvoke(InvocableHandlerMethod.java:254) ~[spring-web-6.1.1.jar:6.1.1]
+	at org.springframework.web.method.support.InvocableHandlerMethod.invokeForRequest(InvocableHandlerMethod.java:182) ~[spring-web-6.1.1.jar:6.1.1]
+	at org.springframework.web.servlet.mvc.method.annotation.ServletInvocableHandlerMethod.invokeAndHandle(ServletInvocableHandlerMethod.java:118) ~[spring-webmvc-6.1.1.jar:6.1.1]
+	at org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerAdapter.invokeHandlerMethod(RequestMappingHandlerAdapter.java:917) ~[spring-webmvc-6.1.1.jar:6.1.1]
+	at org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerAdapter.handleInternal(RequestMappingHandlerAdapter.java:829) ~[spring-webmvc-6.1.1.jar:6.1.1]
+	at org.springframework.web.servlet.mvc.method.AbstractHandlerMethodAdapter.handle(AbstractHandlerMethodAdapter.java:87) ~[spring-webmvc-6.1.1.jar:6.1.1]
+	at org.springframework.web.servlet.DispatcherServlet.doDispatch(DispatcherServlet.java:1089) ~[spring-webmvc-6.1.1.jar:6.1.1]
+	at org.springframework.web.servlet.DispatcherServlet.doService(DispatcherServlet.java:979) ~[spring-webmvc-6.1.1.jar:6.1.1]
+	at org.springframework.web.servlet.FrameworkServlet.processRequest(FrameworkServlet.java:1014) ~[spring-webmvc-6.1.1.jar:6.1.1]
+	at org.springframework.web.servlet.FrameworkServlet.doGet(FrameworkServlet.java:903) ~[spring-webmvc-6.1.1.jar:6.1.1]
+	at jakarta.servlet.http.HttpServlet.service(HttpServlet.java:564) ~[tomcat-embed-core-10.1.16.jar:6.0]
+	at org.springframework.web.servlet.FrameworkServlet.service(FrameworkServlet.java:885) ~[spring-webmvc-6.1.1.jar:6.1.1]
+	at jakarta.servlet.http.HttpServlet.service(HttpServlet.java:658) ~[tomcat-embed-core-10.1.16.jar:6.0]
+	at org.apache.catalina.core.ApplicationFilterChain.internalDoFilter(ApplicationFilterChain.java:205) ~[tomcat-embed-core-10.1.16.jar:10.1.16]
+	at org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:149) ~[tomcat-embed-core-10.1.16.jar:10.1.16]
+	at org.apache.tomcat.websocket.server.WsFilter.doFilter(WsFilter.java:51) ~[tomcat-embed-websocket-10.1.16.jar:10.1.16]
+	at org.apache.catalina.core.ApplicationFilterChain.internalDoFilter(ApplicationFilterChain.java:174) ~[tomcat-embed-core-10.1.16.jar:10.1.16]
+	at org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:149) ~[tomcat-embed-core-10.1.16.jar:10.1.16]
+	at org.springframework.web.filter.RequestContextFilter.doFilterInternal(RequestContextFilter.java:100) ~[spring-web-6.1.1.jar:6.1.1]
+	at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116) ~[spring-web-6.1.1.jar:6.1.1]
+	at org.apache.catalina.core.ApplicationFilterChain.internalDoFilter(ApplicationFilterChain.java:174) ~[tomcat-embed-core-10.1.16.jar:10.1.16]
+	at org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:149) ~[tomcat-embed-core-10.1.16.jar:10.1.16]
+	at org.springframework.web.filter.FormContentFilter.doFilterInternal(FormContentFilter.java:93) ~[spring-web-6.1.1.jar:6.1.1]
+	at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116) ~[spring-web-6.1.1.jar:6.1.1]
+	at org.apache.catalina.core.ApplicationFilterChain.internalDoFilter(ApplicationFilterChain.java:174) ~[tomcat-embed-core-10.1.16.jar:10.1.16]
+	at org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:149) ~[tomcat-embed-core-10.1.16.jar:10.1.16]
+	at org.springframework.web.filter.CharacterEncodingFilter.doFilterInternal(CharacterEncodingFilter.java:201) ~[spring-web-6.1.1.jar:6.1.1]
+	at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116) ~[spring-web-6.1.1.jar:6.1.1]
+	at org.apache.catalina.core.ApplicationFilterChain.internalDoFilter(ApplicationFilterChain.java:174) ~[tomcat-embed-core-10.1.16.jar:10.1.16]
+	at org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:149) ~[tomcat-embed-core-10.1.16.jar:10.1.16]
+	at org.apache.catalina.core.StandardWrapperValve.invoke(StandardWrapperValve.java:167) [tomcat-embed-core-10.1.16.jar:10.1.16]
+	at org.apache.catalina.core.StandardContextValve.invoke(StandardContextValve.java:90) [tomcat-embed-core-10.1.16.jar:10.1.16]
+	at org.apache.catalina.authenticator.AuthenticatorBase.invoke(AuthenticatorBase.java:482) [tomcat-embed-core-10.1.16.jar:10.1.16]
+	at org.apache.catalina.core.StandardHostValve.invoke(StandardHostValve.java:115) [tomcat-embed-core-10.1.16.jar:10.1.16]
+	at org.apache.catalina.valves.ErrorReportValve.invoke(ErrorReportValve.java:93) [tomcat-embed-core-10.1.16.jar:10.1.16]
+	at org.apache.catalina.core.StandardEngineValve.invoke(StandardEngineValve.java:74) [tomcat-embed-core-10.1.16.jar:10.1.16]
+	at org.apache.catalina.connector.CoyoteAdapter.service(CoyoteAdapter.java:340) [tomcat-embed-core-10.1.16.jar:10.1.16]
+	at org.apache.coyote.http11.Http11Processor.service(Http11Processor.java:391) [tomcat-embed-core-10.1.16.jar:10.1.16]
+	at org.apache.coyote.AbstractProcessorLight.process(AbstractProcessorLight.java:63) [tomcat-embed-core-10.1.16.jar:10.1.16]
+	at org.apache.coyote.AbstractProtocol$ConnectionHandler.process(AbstractProtocol.java:896) [tomcat-embed-core-10.1.16.jar:10.1.16]
+	at org.apache.tomcat.util.net.NioEndpoint$SocketProcessor.doRun(NioEndpoint.java:1744) [tomcat-embed-core-10.1.16.jar:10.1.16]
+	at org.apache.tomcat.util.net.SocketProcessorBase.run(SocketProcessorBase.java:52) [tomcat-embed-core-10.1.16.jar:10.1.16]
+	at org.apache.tomcat.util.threads.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1191) [tomcat-embed-core-10.1.16.jar:10.1.16]
+	at org.apache.tomcat.util.threads.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:659) [tomcat-embed-core-10.1.16.jar:10.1.16]
+	at org.apache.tomcat.util.threads.TaskThread$WrappingRunnable.run(TaskThread.java:61) [tomcat-embed-core-10.1.16.jar:10.1.16]
+	at java.base/java.lang.Thread.run(Thread.java:833) [?:?]
+2026-03-03 23:42:45.007 [http-nio-8080-exec-7] DEBUG com.easychat.repository.ChatSessionRepository.insert - <==    Updates: 1
+2026-03-03 23:42:47.324 [http-nio-8080-exec-8] DEBUG com.easychat.repository.ChatSessionRepository.selectList - ==>  Preparing: SELECT id,session_id,title,model_type,summary,max_rounds,created_at,updated_at FROM chat_session WHERE (session_id = ?)
+2026-03-03 23:42:47.325 [http-nio-8080-exec-8] DEBUG com.easychat.repository.ChatSessionRepository.selectList - ==> Parameters: 8ae63fc5-a3cd-4f65-9170-23226b12e602(String)
+2026-03-03 23:42:47.365 [http-nio-8080-exec-8] DEBUG com.easychat.repository.ChatSessionRepository.selectList - <==      Total: 1
+2026-03-03 23:42:47.369 [http-nio-8080-exec-8] DEBUG com.easychat.repository.ChatMessageRepository.selectList - ==>  Preparing: SELECT id,session_id,role,content,message_order,created_at FROM chat_message WHERE (session_id = ?) ORDER BY message_order ASC
+2026-03-03 23:42:47.369 [http-nio-8080-exec-8] DEBUG com.easychat.repository.ChatMessageRepository.selectList - ==> Parameters: 1(Long)
+2026-03-03 23:42:47.417 [http-nio-8080-exec-8] DEBUG com.easychat.repository.ChatMessageRepository.selectList - <==      Total: 0
+2026-03-03 23:42:52.914 [http-nio-8080-exec-10] DEBUG com.easychat.repository.ChatSessionRepository.updateById - ==>  Preparing: UPDATE chat_session SET session_id=?, title=?, model_type=?, max_rounds=?, created_at=?, updated_at=? WHERE id=?
+2026-03-03 23:42:52.915 [http-nio-8080-exec-10] DEBUG com.easychat.repository.ChatSessionRepository.updateById - ==> Parameters: 8ae63fc5-a3cd-4f65-9170-23226b12e602(String), 你好(String), openai(String), 10(Integer), 1772552564915(Long), 1772552572854(Long), 1(Long)
+2026-03-03 23:42:53.006 [http-nio-8080-exec-10] DEBUG com.easychat.repository.ChatSessionRepository.updateById - <==    Updates: 1
+2026-03-03 23:42:53.021 [http-nio-8080-exec-3] DEBUG com.easychat.repository.ChatSessionRepository.selectList - ==>  Preparing: SELECT id,session_id,title,model_type,summary,max_rounds,created_at,updated_at FROM chat_session WHERE (session_id = ?)
+2026-03-03 23:42:53.022 [http-nio-8080-exec-3] DEBUG com.easychat.repository.ChatSessionRepository.selectList - ==> Parameters: 8ae63fc5-a3cd-4f65-9170-23226b12e602(String)
+2026-03-03 23:42:53.062 [http-nio-8080-exec-3] DEBUG com.easychat.repository.ChatSessionRepository.selectList - <==      Total: 1
+2026-03-03 23:42:53.064 [http-nio-8080-exec-3] DEBUG com.easychat.repository.ChatMessageRepository.selectList - ==>  Preparing: SELECT id,session_id,role,content,message_order,created_at FROM chat_message WHERE (session_id = ?) ORDER BY message_order ASC
+2026-03-03 23:42:53.065 [http-nio-8080-exec-3] DEBUG com.easychat.repository.ChatMessageRepository.selectList - ==> Parameters: 1(Long)
+2026-03-03 23:42:53.108 [http-nio-8080-exec-3] DEBUG com.easychat.repository.ChatMessageRepository.selectList - <==      Total: 0
+2026-03-03 23:42:53.109 [http-nio-8080-exec-3] DEBUG com.easychat.repository.ChatMessageRepository.insert - ==>  Preparing: INSERT INTO chat_message ( session_id, role, content, message_order, created_at ) VALUES ( ?, ?, ?, ?, ? )
+2026-03-03 23:42:53.110 [http-nio-8080-exec-3] DEBUG com.easychat.repository.ChatMessageRepository.insert - ==> Parameters: 1(Long), user(String), 你好(String), 0(Integer), 1772552573109(Long)
+2026-03-03 23:42:53.197 [http-nio-8080-exec-3] DEBUG com.easychat.repository.ChatMessageRepository.insert - <==    Updates: 1
+2026-03-03 23:42:53.199 [http-nio-8080-exec-3] DEBUG com.easychat.repository.ChatSessionRepository.updateById - ==>  Preparing: UPDATE chat_session SET session_id=?, title=?, model_type=?, max_rounds=?, created_at=?, updated_at=? WHERE id=?
+2026-03-03 23:42:53.199 [http-nio-8080-exec-3] DEBUG com.easychat.repository.ChatSessionRepository.updateById - ==> Parameters: 8ae63fc5-a3cd-4f65-9170-23226b12e602(String), 你好(String), openai(String), 10(Integer), 1772552564915(Long), 1772552573198(Long), 1(Long)
+2026-03-03 23:42:53.286 [http-nio-8080-exec-3] DEBUG com.easychat.repository.ChatSessionRepository.updateById - <==    Updates: 1
+2026-03-03 23:42:53.305 [http-nio-8080-exec-4] DEBUG com.easychat.repository.ChatSessionRepository.updateById - ==>  Preparing: UPDATE chat_session SET session_id=?, title=?, model_type=?, max_rounds=?, created_at=?, updated_at=? WHERE id=?
+2026-03-03 23:42:53.307 [http-nio-8080-exec-4] DEBUG com.easychat.repository.ChatSessionRepository.updateById - ==> Parameters: 8ae63fc5-a3cd-4f65-9170-23226b12e602(String), 你好(String), openai(String), 10(Integer), 1772552564915(Long), 1772552573305(Long), 1(Long)
+2026-03-03 23:42:53.390 [http-nio-8080-exec-4] DEBUG com.easychat.repository.ChatSessionRepository.updateById - <==    Updates: 1

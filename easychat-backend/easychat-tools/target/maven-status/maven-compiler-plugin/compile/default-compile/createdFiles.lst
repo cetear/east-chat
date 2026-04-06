@@ -1,0 +1,3 @@
+com\easychat\tools\ToolRegistry.class
+com\easychat\tools\impl\MysqlQueryTool.class
+com\easychat\tools\Tool.class
