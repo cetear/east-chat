@@ -1,5 +1,0 @@
-com\easychat\api\config\WebConfig.class
-com\easychat\api\dto\ChatResponse.class
-com\easychat\api\dto\ChatRequest.class
-com\easychat\api\controller\ChatController.class
-com\easychat\api\dto\MessageDTO.class
