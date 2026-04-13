@@ -1,5 +1,5 @@
 # 编译输出
-/target/
+target/
 /build/
 
 # 日志
