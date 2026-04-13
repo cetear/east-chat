@@ -8,7 +8,7 @@ spring:
     driver-class-name: com.mysql.cj.jdbc.Driver
     url: jdbc:mysql://gz-cdb-ns0ptu89.sql.tencentcdb.com:26090/ai-chat?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
     username: aichat
-    password: aichat123
+    password: Denglinyi0453
   # Elasticsearch 配置（可选，未配置时不启用）
   # elasticsearch:
   #   uris: http://localhost:9200

@@ -24,6 +24,12 @@
             <artifactId>easychat-api</artifactId>
         </dependency>
 
+        <!-- Runtime safety: ensure core classes are always on app classpath -->
+        <dependency>
+            <groupId>com.easychat</groupId>
+            <artifactId>easychat-core</artifactId>
+        </dependency>
+
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter</artifactId>
