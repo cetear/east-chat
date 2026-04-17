@@ -49,67 +49,65 @@ public class AgentFacade {
     public SseEmitter streamChat(Long sessionId, String userMessage, boolean toolsEnabled, boolean ragEnabled) {
         SseEmitter emitter = SSEUtil.createEmitter();
 
-        new Thread(() -> {
-            try {
-                // 保存用户消息
-                ChatMessageDO userMsg = new ChatMessageDO("user", userMessage);
-                userMsg.setSessionId(sessionId);
-                userMsg.setMessageOrder(getNextMessageOrder(sessionId));
-                conversationMemory.addMessage(userMsg);
+        try {
+            // 保存用户消息
+            ChatMessageDO userMsg = new ChatMessageDO("user", userMessage);
+            userMsg.setSessionId(sessionId);
+            userMsg.setMessageOrder(getNextMessageOrder(sessionId));
+            conversationMemory.addMessage(userMsg);
 
-                // 构建 Agent 上下文
-                AgentContext context = new AgentContext();
-                context.setSessionId(sessionId);
-                context.setUserMessage(userMessage);
-                context.setToolsEnabled(toolsEnabled);
-                context.setRagEnabled(ragEnabled);
+            // 构建 Agent 上下文
+            AgentContext context = new AgentContext();
+            context.setSessionId(sessionId);
+            context.setUserMessage(userMessage);
+            context.setToolsEnabled(toolsEnabled);
+            context.setRagEnabled(ragEnabled);
 
-                // 流式执行 Agent
-                StringBuilder fullResponse = new StringBuilder();
-                Flux<AgentEvent> stream = reactAgent.streamRun(context);
+            // 流式执行 Agent
+            StringBuilder fullResponse = new StringBuilder();
+            Flux<AgentEvent> stream = reactAgent.streamRun(context);
 
-                stream.subscribe(
-                    event -> {
-                        switch (event.getType()) {
-                            case THOUGHT -> SSEUtil.sendThought(emitter, event.toJsonData());
-                            case ACTION -> SSEUtil.sendAction(emitter, event.toJsonData());
-                            case OBSERVATION -> SSEUtil.sendObservation(emitter, event.toJsonData());
-                            case MESSAGE -> {
-                                fullResponse.append(event.getContent());
-                                SSEUtil.sendMessage(emitter, event.getContent());
-                            }
-                            case ERROR -> SSEUtil.sendError(emitter, event.getContent());
-                            default -> { }
+            stream.subscribe(
+                event -> {
+                    switch (event.getType()) {
+                        case THOUGHT -> SSEUtil.sendThought(emitter, event.toJsonData());
+                        case ACTION -> SSEUtil.sendAction(emitter, event.toJsonData());
+                        case OBSERVATION -> SSEUtil.sendObservation(emitter, event.toJsonData());
+                        case MESSAGE -> {
+                            fullResponse.append(event.getContent());
+                            SSEUtil.sendMessage(emitter, event.getContent());
                         }
-                    },
-                    error -> {
-                        log.error("Streaming error", error);
-                        SSEUtil.sendError(emitter, error.getMessage());
-                    },
-                    () -> {
-                        // 保存 AI 消息
-                        ChatMessageDO aiMsg = new ChatMessageDO("assistant", fullResponse.toString());
-                        aiMsg.setSessionId(sessionId);
-                        aiMsg.setMessageOrder(getNextMessageOrder(sessionId));
-                        conversationMemory.addMessage(aiMsg);
-
-                        // 发送 Kafka 事件
-                        if (chatEventProducer != null) {
-                            chatEventProducer.sendChatEvent(sessionId.toString(), userMessage);
-                        }
-
-                        // 更新会话时间
-                        updateSessionTimestamp(sessionId);
-
-                        SSEUtil.sendFinish(emitter, "stop");
+                        case ERROR -> SSEUtil.sendError(emitter, event.getContent());
+                        default -> { }
                     }
-                );
+                },
+                error -> {
+                    log.error("Streaming error", error);
+                    SSEUtil.sendError(emitter, error.getMessage());
+                },
+                () -> {
+                    // 保存 AI 消息
+                    ChatMessageDO aiMsg = new ChatMessageDO("assistant", fullResponse.toString());
+                    aiMsg.setSessionId(sessionId);
+                    aiMsg.setMessageOrder(getNextMessageOrder(sessionId));
+                    conversationMemory.addMessage(aiMsg);
 
-            } catch (Exception e) {
-                log.error("Stream chat failed", e);
-                SSEUtil.sendError(emitter, e.getMessage());
-            }
-        }).start();
+                    // 发送 Kafka 事件
+                    if (chatEventProducer != null) {
+                        chatEventProducer.sendChatEvent(sessionId.toString(), userMessage);
+                    }
+
+                    // 更新会话时间
+                    updateSessionTimestamp(sessionId);
+
+                    SSEUtil.sendFinish(emitter, "stop");
+                }
+            );
+
+        } catch (Exception e) {
+            log.error("Stream chat failed", e);
+            SSEUtil.sendError(emitter, e.getMessage());
+        }
 
         return emitter;
     }

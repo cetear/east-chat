@@ -15,6 +15,26 @@ spring:
   # Kafka 配置（可选，未配置时不启用）
   # kafka:
   #   bootstrap-servers: localhost:9092
+  druid:
+    url: jdbc:mysql://gz-cdb-ns0ptu89.sql.tencentcdb.com:26090/ai-chat?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
+    username: aichat
+    password: Denglinyi0453
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+    initial-size: 5
+    min-idle: 5
+    max-active: 20
+    max-wait: 60000
+
+    validation-query: SELECT 1
+    test-while-idle: true
+
+    filters: stat,wall,slf4j
+
+    stat-view-servlet:
+      enabled: true
+      login-username: admin
+      login-password: admin
 
 mybatis-plus:
   configuration:
@@ -24,11 +44,11 @@ mybatis-plus:
     db-config:
       id-type: auto
 
-# LangChain4j LLM 配置（替代原 Python Agent 服务）
+# LangChain4j LLM 配置
 easychat:
   llm:
-    api-key: ${OPENAI_API_KEY:your-api-key-here}
-    base-url: ${OPENAI_BASE_URL:https://api.openai.com/v1}
-    model-name: ${OPENAI_MODEL:gpt-4}
+    api-key: ${OPENAI_API_KEY:XXXXXXXXXXXX}
+    base-url: ${OPENAI_BASE_URL:https://api.deepseek.com/v1}
+    model-name: ${OPENAI_MODEL:deepseek-chat}
     temperature: 0.7
     max-tokens: 2000
