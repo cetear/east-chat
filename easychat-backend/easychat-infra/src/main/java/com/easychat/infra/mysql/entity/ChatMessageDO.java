@@ -24,6 +24,14 @@ public class ChatMessageDO {
     @TableField("created_at")
     private Long createdAt;
 
+    /** 消息状态：PROCESSING / DONE / FAILED */
+    @TableField("status")
+    private String status;
+
+    /** 最终成功的渠道标识 */
+    @TableField("provider_code")
+    private String providerCode;
+
     public ChatMessageDO() {
     }
 

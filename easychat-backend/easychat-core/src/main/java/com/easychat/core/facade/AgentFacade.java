@@ -1,10 +1,12 @@
 package com.easychat.core.facade;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.easychat.common.util.SSEUtil;
 import com.easychat.core.agent.AgentEvent;
 import com.easychat.core.agent.ReActAgent;
 import com.easychat.core.context.AgentContext;
+import com.easychat.core.router.ModelRouter;
 import com.easychat.infra.kafka.ChatEventProducer;
 import com.easychat.infra.mysql.entity.ChatMessageDO;
 import com.easychat.infra.mysql.entity.ChatSessionDO;
@@ -43,8 +45,14 @@ public class AgentFacade {
     @Autowired(required = false)
     private ChatEventProducer chatEventProducer;
 
+    // ------------------------------------------------------------------ //
+    //  公开方法
+    // ------------------------------------------------------------------ //
+
     /**
-     * 流式聊天
+     * 流式聊天。
+     * 通过 {@link ModelRouter#MODEL_CODE_HOLDER} 将会话绑定的模型透传给路由器，
+     * 使路由器能够按模型选择合适的渠道商。
      */
     public SseEmitter streamChat(Long sessionId, String userMessage, boolean toolsEnabled, boolean ragEnabled) {
         SseEmitter emitter = SSEUtil.createEmitter();
@@ -54,7 +62,15 @@ public class AgentFacade {
             ChatMessageDO userMsg = new ChatMessageDO("user", userMessage);
             userMsg.setSessionId(sessionId);
             userMsg.setMessageOrder(getNextMessageOrder(sessionId));
+            userMsg.setStatus("DONE");
             conversationMemory.addMessage(userMsg);
+
+            // 预建 AI 消息占位（PROCESSING 状态）
+            ChatMessageDO aiMsg = new ChatMessageDO("assistant", "");
+            aiMsg.setSessionId(sessionId);
+            aiMsg.setMessageOrder(getNextMessageOrder(sessionId));
+            aiMsg.setStatus("PROCESSING");
+            conversationMemory.addMessage(aiMsg);
 
             // 构建 Agent 上下文
             AgentContext context = new AgentContext();
@@ -63,7 +79,10 @@ public class AgentFacade {
             context.setToolsEnabled(toolsEnabled);
             context.setRagEnabled(ragEnabled);
 
-            // 流式执行 Agent
+            // 将会话关联的模型标识设置到 ThreadLocal，供 ModelRouter 使用
+            String modelCode = resolveModelCode(sessionId);
+            ModelRouter.MODEL_CODE_HOLDER.set(modelCode);
+
             StringBuilder fullResponse = new StringBuilder();
             Flux<AgentEvent> stream = reactAgent.streamRun(context);
 
@@ -83,72 +102,66 @@ public class AgentFacade {
                 },
                 error -> {
                     log.error("Streaming error", error);
+                    updateMessageFinal(aiMsg.getId(), "FAILED", fullResponse.toString(), modelCode);
                     SSEUtil.sendError(emitter, error.getMessage());
+                    ModelRouter.MODEL_CODE_HOLDER.remove();
                 },
                 () -> {
-                    // 保存 AI 消息
-                    ChatMessageDO aiMsg = new ChatMessageDO("assistant", fullResponse.toString());
-                    aiMsg.setSessionId(sessionId);
-                    aiMsg.setMessageOrder(getNextMessageOrder(sessionId));
-                    conversationMemory.addMessage(aiMsg);
-
-                    // 发送 Kafka 事件
+                    updateMessageFinal(aiMsg.getId(), "DONE", fullResponse.toString(), modelCode);
                     if (chatEventProducer != null) {
                         chatEventProducer.sendChatEvent(sessionId.toString(), userMessage);
                     }
-
-                    // 更新会话时间
                     updateSessionTimestamp(sessionId);
-
                     SSEUtil.sendFinish(emitter, "stop");
+                    ModelRouter.MODEL_CODE_HOLDER.remove();
                 }
             );
 
         } catch (Exception e) {
             log.error("Stream chat failed", e);
             SSEUtil.sendError(emitter, e.getMessage());
+            ModelRouter.MODEL_CODE_HOLDER.remove();
         }
 
         return emitter;
     }
 
     /**
-     * 同步聊天
+     * 同步聊天。
      */
     public String chat(Long sessionId, String userMessage) {
+        String modelCode = resolveModelCode(sessionId);
+        ModelRouter.MODEL_CODE_HOLDER.set(modelCode);
         try {
-            // 保存用户消息
             ChatMessageDO userMsg = new ChatMessageDO("user", userMessage);
             userMsg.setSessionId(sessionId);
             userMsg.setMessageOrder(getNextMessageOrder(sessionId));
+            userMsg.setStatus("DONE");
             conversationMemory.addMessage(userMsg);
 
-            // 构建 Agent 上下文
             AgentContext context = new AgentContext();
             context.setSessionId(sessionId);
             context.setUserMessage(userMessage);
 
-            // 执行 Agent
             String response = reactAgent.run(context).getResponse();
 
-            // 保存 AI 消息
             ChatMessageDO aiMsg = new ChatMessageDO("assistant", response);
             aiMsg.setSessionId(sessionId);
             aiMsg.setMessageOrder(getNextMessageOrder(sessionId));
+            aiMsg.setStatus("DONE");
+            aiMsg.setProviderCode(modelCode);
             conversationMemory.addMessage(aiMsg);
 
-            // 发送 Kafka 事件
             if (chatEventProducer != null) {
                 chatEventProducer.sendChatEvent(sessionId.toString(), userMessage);
             }
-
-            // 更新会话时间
             updateSessionTimestamp(sessionId);
-
             return response;
         } catch (Exception e) {
             log.error("Chat failed", e);
             throw new RuntimeException("Chat failed", e);
+        } finally {
+            ModelRouter.MODEL_CODE_HOLDER.remove();
         }
     }
 
@@ -177,7 +190,6 @@ public class AgentFacade {
         if (session == null) {
             throw new RuntimeException("Session not found: " + sessionId);
         }
-        // 加载消息列表
         List<ChatMessageDO> messages = chatMessageMapper.selectList(
             new QueryWrapper<ChatMessageDO>()
                 .eq("session_id", session.getId())
@@ -186,24 +198,15 @@ public class AgentFacade {
         return session;
     }
 
-    /**
-     * 获取所有会话
-     */
     public List<ChatSessionDO> getSessions() {
         return chatSessionMapper.selectList(null);
     }
 
-    /**
-     * 更新会话
-     */
     public void updateSession(ChatSessionDO session) {
         session.setUpdatedAt(System.currentTimeMillis());
         chatSessionMapper.updateById(session);
     }
 
-    /**
-     * 删除会话
-     */
     public void deleteSession(String sessionId) {
         ChatSessionDO session = getSession(sessionId);
         chatMessageMapper.delete(
@@ -211,16 +214,44 @@ public class AgentFacade {
         chatSessionMapper.deleteById(session.getId());
     }
 
-    // ---- 私有方法 ----
+    // ------------------------------------------------------------------ //
+    //  私有方法
+    // ------------------------------------------------------------------ //
+
+    /**
+     * 从会话中解析模型标识（modelType 字段）。
+     * 未找到时退化为空字符串，让 ModelRouter 使用降级客户端。
+     */
+    private String resolveModelCode(Long sessionId) {
+        try {
+            ChatSessionDO session = chatSessionMapper.selectById(sessionId);
+            return session != null && session.getModelType() != null ? session.getModelType() : "";
+        } catch (Exception e) {
+            log.warn("Failed to resolve model code for session {}", sessionId);
+            return "";
+        }
+    }
+
+    /**
+     * 流式完成后更新 AI 消息状态和内容。
+     */
+    private void updateMessageFinal(Long msgId, String status, String content, String providerCode) {
+        if (msgId == null) return;
+        ChatMessageDO update = new ChatMessageDO();
+        update.setId(msgId);
+        update.setStatus(status);
+        update.setContent(content);
+        update.setProviderCode(providerCode);
+        chatMessageMapper.updateById(update);
+    }
 
     private int getNextMessageOrder(Long sessionId) {
-        Integer maxOrder = chatMessageMapper.selectList(
-            new QueryWrapper<ChatMessageDO>().eq("session_id", sessionId))
-            .stream()
-            .map(ChatMessageDO::getMessageOrder)
-            .max(Integer::compareTo)
-            .orElse(-1);
-        return maxOrder + 1;
+        return chatMessageMapper.selectList(
+                new LambdaQueryWrapper<ChatMessageDO>().eq(ChatMessageDO::getSessionId, sessionId))
+                .stream()
+                .map(ChatMessageDO::getMessageOrder)
+                .max(Integer::compareTo)
+                .orElse(-1) + 1;
     }
 
     private void updateSessionTimestamp(Long sessionId) {

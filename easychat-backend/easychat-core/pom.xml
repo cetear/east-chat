@@ -24,6 +24,10 @@
         </dependency>
         <dependency>
             <groupId>com.easychat</groupId>
+            <artifactId>easychat-infra</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.easychat</groupId>
             <artifactId>easychat-llm</artifactId>
         </dependency>
         <dependency>
