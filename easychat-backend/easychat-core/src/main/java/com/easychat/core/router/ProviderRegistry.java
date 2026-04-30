@@ -87,8 +87,8 @@ public class ProviderRegistry {
                 llmProvider,
                 cfg.getPriority() != null ? cfg.getPriority() : 0,
                 cfg.getWeight() != null ? cfg.getWeight() : 1,
-                cfg.getCircuitBreakerThreshold() != null ? cfg.getCircuitBreakerThreshold() : 3,
-                cfg.getCircuitBreakerWindow() != null ? cfg.getCircuitBreakerWindow() : 30
+                3,
+                30
         );
     }
 }

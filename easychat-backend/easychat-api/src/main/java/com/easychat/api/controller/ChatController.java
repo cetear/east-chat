@@ -46,7 +46,7 @@ public class ChatController {
 
             return ResponseEntity.ok(Map.of(
                 "content", response,
-                "sessionId", session.getSessionId()
+                "sessionId", session.getSessionCode()
             ));
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
@@ -72,7 +72,7 @@ public class ChatController {
 
     @PutMapping("/session/{sessionId}")
     public ResponseEntity<ChatSessionDO> updateSession(@PathVariable String sessionId, @RequestBody ChatSessionDO session) {
-        session.setSessionId(sessionId);
+        session.setSessionCode(sessionId);
         agentFacade.updateSession(session);
         return ResponseEntity.ok(session);
     }
