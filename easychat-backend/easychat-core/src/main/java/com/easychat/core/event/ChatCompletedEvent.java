@@ -1,0 +1,10 @@
+package com.easychat.core.event;
+
+import lombok.Data;
+import lombok.EqualsAndHashCode;
+
+@Data
+@EqualsAndHashCode(callSuper = true)
+public class ChatCompletedEvent extends ChatEvent {
+    private Integer latencyMs;
+}
