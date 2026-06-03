@@ -9,12 +9,9 @@ spring:
     url: jdbc:mysql://gz-cdb-ns0ptu89.sql.tencentcdb.com:26090/ai-chat?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
     username: aichat
     password: Denglinyi0453
-  # Elasticsearch 配置（可选，未配置时不启用）
+  # Elasticsearch config is optional.
   # elasticsearch:
   #   uris: http://localhost:9200
-  # Kafka 配置（可选，未配置时不启用）
-  # kafka:
-  #   bootstrap-servers: localhost:9092
   druid:
     url: jdbc:mysql://gz-cdb-ns0ptu89.sql.tencentcdb.com:26090/ai-chat?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
     username: aichat
@@ -44,7 +41,7 @@ mybatis-plus:
     db-config:
       id-type: auto
 
-# LangChain4j LLM 配置
+# LangChain4j LLM config
 easychat:
   llm:
     api-key: ${OPENAI_API_KEY:XXXXXXXXXXXX}

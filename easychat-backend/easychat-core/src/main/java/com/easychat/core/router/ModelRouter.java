@@ -1,5 +1,7 @@
 package com.easychat.core.router;
 
+import com.easychat.core.context.ChatExecutionContext;
+import com.easychat.core.port.ChatModelClient;
 import com.easychat.llm.client.LLMClient;
 import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Flux;
@@ -20,7 +22,7 @@ import java.util.List;
  * 若未设置，则退化为只调用 {@code fallbackClient}（原 LangChain4j 默认实现）。
  */
 @Slf4j
-public class ModelRouter implements LLMClient {
+public class ModelRouter implements LLMClient, ChatModelClient {
 
     /** 调用方在使用前通过此 ThreadLocal 指定模型，调用结束后需 clear */
     public static final ThreadLocal<String> MODEL_CODE_HOLDER = new ThreadLocal<>();
@@ -45,7 +47,10 @@ public class ModelRouter implements LLMClient {
 
     @Override
     public String chat(String prompt) {
-        String modelCode = MODEL_CODE_HOLDER.get();
+        return chat(prompt, MODEL_CODE_HOLDER.get());
+    }
+
+    public String chat(String prompt, String modelCode) {
         List<ProviderWrapper> providers = modelCode != null ? registry.getProviders(modelCode) : List.of();
 
         if (providers.isEmpty()) {
@@ -72,8 +77,16 @@ public class ModelRouter implements LLMClient {
     }
 
     @Override
+    public String chat(String prompt, ChatExecutionContext context) {
+        return chat(prompt, context != null ? context.getModelCode() : null);
+    }
+
+    @Override
     public Flux<String> streamChat(String prompt) {
-        String modelCode = MODEL_CODE_HOLDER.get();
+        return streamChat(prompt, MODEL_CODE_HOLDER.get());
+    }
+
+    public Flux<String> streamChat(String prompt, String modelCode) {
         List<ProviderWrapper> providers = modelCode != null ? registry.getProviders(modelCode) : List.of();
 
         if (providers.isEmpty()) {
@@ -81,6 +94,11 @@ public class ModelRouter implements LLMClient {
         }
 
         return Flux.create(sink -> attemptStream(providers, 0, new StringBuilder(), prompt, sink));
+    }
+
+    @Override
+    public Flux<String> streamChat(String prompt, ChatExecutionContext context) {
+        return streamChat(prompt, context != null ? context.getModelCode() : null);
     }
 
     // ------------------------------------------------------------------ //

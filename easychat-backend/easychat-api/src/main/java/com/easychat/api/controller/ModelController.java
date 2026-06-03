@@ -1,24 +1,25 @@
 package com.easychat.api.controller;
 
-import com.baomidou.mybatisplus.core.conditions.Wrapper;
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
-import com.easychat.api.dto.AddModelRequestDTO;
 import com.easychat.api.dto.ModelProviderDTO;
 import com.easychat.api.dto.ModelRequestDTO;
 import com.easychat.api.dto.ProviderDTO;
+import com.easychat.common.exception.BusinessException;
 import com.easychat.common.model.Result;
-import com.easychat.infra.mysql.entity.ModelDO;
-import com.easychat.infra.mysql.entity.ModelProviderDO;
-import com.easychat.infra.mysql.entity.ProviderDO;
-import com.easychat.infra.mysql.mapper.ModelMapper;
-import com.easychat.infra.mysql.mapper.ModelProviderMapper;
-import com.easychat.infra.mysql.mapper.ProviderMapper;
-import org.apache.ibatis.annotations.Param;
+import com.easychat.core.service.model.ModelCommand;
+import com.easychat.core.service.model.ModelManageService;
+import com.easychat.core.service.model.ModelProviderCommand;
+import com.easychat.core.service.model.ModelProviderView;
+import com.easychat.core.service.model.ProviderCommand;
+import com.easychat.core.service.model.ProviderView;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
-import java.time.LocalDateTime;
 import java.util.List;
 
 @RestController
@@ -26,178 +27,131 @@ import java.util.List;
 public class ModelController {
 
     @Autowired
-    private ProviderMapper providerMapper;
+    private ModelManageService modelManageService;
 
-    @Autowired
-    private ModelProviderMapper modelProviderMapper;
-
-    @Autowired
-    private ModelMapper modelMapper;
-
-    /** ==================== 渠道商 CRUD ==================== **/
-
-    @PostMapping("/provider/creat")
+    @PostMapping("/provider/create")
     public Result<Void> addProvider(@RequestBody ProviderDTO dto) {
-        ProviderDO entity = new ProviderDO();
-        entity.setProviderCode(dto.getProviderCode());
-        entity.setBaseUrl(dto.getBaseUrl());
-        entity.setApiKey(dto.getApiKey());
-        entity.setEnabled(dto.getEnabled() != null ? dto.getEnabled() : 1);
-        entity.setFailCount(0);
-        entity.setCircuitStatus("CLOSED");
-        entity.setCreatedAt(LocalDateTime.now());
-        entity.setUpdatedAt(LocalDateTime.now());
-        providerMapper.insert(entity);
-        return Result.success();
+        try {
+            modelManageService.addProvider(toCommand(dto));
+            return Result.success();
+        } catch (BusinessException e) {
+            return Result.error(e.getMessage());
+        }
     }
 
     @GetMapping("/provider/list")
-    public Result<List<ProviderDO>> listProviders() {
-        List<ProviderDO> list = providerMapper.selectList(null);
-        return Result.success(list);
+    public Result<List<ProviderView>> listProviders() {
+        return Result.success(modelManageService.listProviders());
     }
 
     @GetMapping("/provider/{id}")
-    public Result<ProviderDO> getProvider(@PathVariable Long id) {
-        ProviderDO entity = providerMapper.selectById(id);
-        if (entity == null) {
-            return Result.error("渠道商不存在");
+    public Result<ProviderView> getProvider(@PathVariable Long id) {
+        try {
+            return Result.success(modelManageService.getProvider(id));
+        } catch (BusinessException e) {
+            return Result.error(e.getMessage());
         }
-        return Result.success(entity);
     }
 
     @PostMapping("/provider/update")
     public Result<Void> updateProvider(@RequestBody ProviderDTO dto) {
-        QueryWrapper<ProviderDO> queryWrapper = new QueryWrapper<>();
-        queryWrapper.eq("provider_code", dto.getProviderCode());
-        ProviderDO providerDO = providerMapper.selectOne(queryWrapper);
-        if (providerDO == null) {
-            return Result.error("渠道商不存在");
+        try {
+            modelManageService.updateProvider(toCommand(dto));
+            return Result.success();
+        } catch (BusinessException e) {
+            return Result.error(e.getMessage());
         }
-        if (dto.getBaseUrl() != null) {
-            providerDO.setBaseUrl(dto.getBaseUrl());
-        }
-        if (dto.getApiKey() != null) {
-            providerDO.setApiKey(dto.getApiKey());
-        }
-        if (dto.getEnabled() != null) {
-            providerDO.setEnabled(dto.getEnabled());
-        }
-        providerDO.setUpdatedAt(LocalDateTime.now());
-        providerMapper.updateById(providerDO);
-        return Result.success();
     }
 
     @DeleteMapping("/provider/{providerCode}")
     public Result<Void> deleteProvider(@PathVariable String providerCode) {
-        QueryWrapper<ProviderDO> queryWrapper = new QueryWrapper<>();
-        queryWrapper.eq("provider_code", providerCode);
-        ProviderDO providerDO = providerMapper.selectOne(queryWrapper);
-        if (providerDO == null) {
-            return Result.error("渠道商不存在");
+        try {
+            modelManageService.deleteProvider(providerCode);
+            return Result.success();
+        } catch (BusinessException e) {
+            return Result.error(e.getMessage());
         }
-        providerMapper.deleteById(providerDO.getId());
-        return Result.success();
     }
 
-    /** ==================== 模型 CRUD ==================== **/
     @PostMapping("/create")
-    public Result<Void> addModel(@RequestBody ModelRequestDTO modelRequestDTO) {
-        QueryWrapper<ModelDO> queryWrapper = new QueryWrapper<>();
-        queryWrapper.eq("model_code", modelRequestDTO.getModelCode());
-        ModelDO modelDO = modelMapper.selectOne(queryWrapper);
-        if (modelDO != null) {
-            throw new RuntimeException();
-        } else {
-            modelDO = new ModelDO();
-            modelDO.setEnabled(modelRequestDTO.getEnabled());
-            modelDO.setModelCode(modelRequestDTO.getModelCode());
-            modelDO.setDefaultConfig(modelRequestDTO.getDefaultConfig());
-            modelDO.setMaxTokens(modelRequestDTO.getMaxTokens());
-            modelDO.setCreatedAt(LocalDateTime.now());
-            modelDO.setUpdatedAt(LocalDateTime.now());
-            modelMapper.insert(modelDO);
+    public Result<Void> addModel(@RequestBody ModelRequestDTO dto) {
+        try {
+            modelManageService.addModel(toCommand(dto));
+            return Result.success();
+        } catch (BusinessException e) {
+            return Result.error(e.getMessage());
         }
-        return Result.success();
     }
 
     @PostMapping("/update")
-    public Result<Void> updateModel(@RequestBody ModelRequestDTO modelRequestDTO) {
-        QueryWrapper<ModelDO> queryWrapper = new QueryWrapper<>();
-        queryWrapper.eq("model_code", modelRequestDTO.getModelCode());
-        ModelDO modelDO = modelMapper.selectOne(queryWrapper);
-        if (modelDO == null) {
-            throw new RuntimeException();
-        } else {
-            modelDO.setEnabled(modelRequestDTO.getEnabled());
-            modelDO.setModelCode(modelRequestDTO.getModelCode());
-            modelDO.setDefaultConfig(modelRequestDTO.getDefaultConfig());
-            modelDO.setMaxTokens(modelRequestDTO.getMaxTokens());
-            modelDO.setUpdatedAt(LocalDateTime.now());
-            modelMapper.updateById(modelDO);
+    public Result<Void> updateModel(@RequestBody ModelRequestDTO dto) {
+        try {
+            modelManageService.updateModel(toCommand(dto));
+            return Result.success();
+        } catch (BusinessException e) {
+            return Result.error(e.getMessage());
         }
-        return Result.success();
     }
 
     @PostMapping("/delete")
-    public Result<Void> deleteModel(@RequestBody ModelRequestDTO modelRequestDTO) {
-        QueryWrapper<ModelDO> queryWrapper = new QueryWrapper<>();
-        queryWrapper.eq("model_code", modelRequestDTO.getModelCode());
-        ModelDO modelDO = modelMapper.selectOne(queryWrapper);
-        if (modelDO == null) {
-            throw new RuntimeException();
-        } else {
-            modelDO.setEnabled(modelRequestDTO.getEnabled());
-            modelDO.setModelCode(modelRequestDTO.getModelCode());
-            modelDO.setDefaultConfig(modelRequestDTO.getDefaultConfig());
-            modelDO.setMaxTokens(modelRequestDTO.getMaxTokens());
-            modelDO.setUpdatedAt(LocalDateTime.now());
-            modelMapper.updateById(modelDO);
+    public Result<Void> deleteModel(@RequestBody ModelRequestDTO dto) {
+        try {
+            modelManageService.deleteModel(dto.getModelCode());
+            return Result.success();
+        } catch (BusinessException e) {
+            return Result.error(e.getMessage());
         }
-        return Result.success();
     }
 
-
-    /** ==================== 指定渠道商下模型路由配置 CRUD ==================== **/
-
-    @PostMapping("/provider/addModelToProvider")
+    @PostMapping("/provider/{providerCode}/models")
     public Result<Void> addModelToProvider(@PathVariable String providerCode,
-                                           @RequestBody ModelProviderDTO addModelrequestDto) {
-        ProviderDO provider = providerMapper.selectOne(
-                new LambdaQueryWrapper<ProviderDO>().eq(ProviderDO::getProviderCode, providerCode));
-        if (provider == null) {
-            return Result.error("渠道商不存在");
+                                           @RequestBody ModelProviderDTO dto) {
+        try {
+            modelManageService.addModelToProvider(providerCode, toCommand(dto));
+            return Result.success();
+        } catch (BusinessException e) {
+            return Result.error(e.getMessage());
         }
-        ModelProviderDO modelProviderDO =
-                modelProviderMapper.selectOne(new LambdaQueryWrapper<ModelProviderDO>().eq(ModelProviderDO::getProviderCode, providerCode));
-        ModelProviderDO entity = new ModelProviderDO();
-        entity.setModelCode(addModelrequestDto.getModelCode());
-        entity.setProviderCode(providerCode);
-        entity.setPriority(addModelrequestDto.getPriority() != null ? addModelrequestDto.getPriority() : 0);
-        entity.setWeight(addModelrequestDto.getWeight() != null ? addModelrequestDto.getWeight() : 1);
-        entity.setTimeoutMs(addModelrequestDto.getTimeoutMs() != null ? addModelrequestDto.getTimeoutMs() : 60000);
-        entity.setMaxRetry(addModelrequestDto.getMaxRetry() != null ? addModelrequestDto.getMaxRetry() : 0);
-        entity.setEnabled(addModelrequestDto.getEnabled() != null ? addModelrequestDto.getEnabled() : 1);
-        entity.setCreatedAt(LocalDateTime.now());
-        entity.setUpdatedAt(LocalDateTime.now());
-        modelProviderMapper.insert(entity);
+    }
+
+    @GetMapping("/provider/{providerCode}/models")
+    public Result<List<ModelProviderView>> listModelsByProvider(@PathVariable String providerCode) {
+        return Result.success(modelManageService.listModelsByProvider(providerCode));
+    }
+
+    @DeleteMapping("/provider/{providerCode}/models/{modelCode}")
+    public Result<Void> deleteModelProvider(@PathVariable String providerCode,
+                                            @PathVariable String modelCode) {
+        modelManageService.deleteModelProvider(providerCode, modelCode);
         return Result.success();
     }
 
-    @PostMapping("/provider/listModelsByProvider")
-    public Result<List<ModelProviderDO>> listModelsByProvider(@Param("providerCode") String providerCode) {
-        List<ModelProviderDO> list = modelProviderMapper.selectList(
-                new LambdaQueryWrapper<ModelProviderDO>().eq(ModelProviderDO::getProviderCode, providerCode));
-        return Result.success(list);
+    private ProviderCommand toCommand(ProviderDTO dto) {
+        ProviderCommand command = new ProviderCommand();
+        command.setProviderCode(dto.getProviderCode());
+        command.setBaseUrl(dto.getBaseUrl());
+        command.setApiKey(dto.getApiKey());
+        command.setEnabled(dto.getEnabled());
+        return command;
     }
 
+    private ModelCommand toCommand(ModelRequestDTO dto) {
+        ModelCommand command = new ModelCommand();
+        command.setModelCode(dto.getModelCode());
+        command.setMaxTokens(dto.getMaxTokens());
+        command.setDefaultConfig(dto.getDefaultConfig());
+        command.setEnabled(dto.getEnabled());
+        return command;
+    }
 
-    @DeleteMapping("/provider/deleteModelProvider")
-    public Result<Void> deleteModelProvider(@Param("providerCode") String providerCode, @Param("modelCode") String modelCode) {
-        modelProviderMapper.delete(
-                new LambdaQueryWrapper<ModelProviderDO>()
-                        .eq(ModelProviderDO::getModelCode, modelCode)
-                        .eq(ModelProviderDO::getProviderCode, providerCode));
-        return Result.success();
+    private ModelProviderCommand toCommand(ModelProviderDTO dto) {
+        ModelProviderCommand command = new ModelProviderCommand();
+        command.setModelCode(dto.getModelCode());
+        command.setPriority(dto.getPriority());
+        command.setWeight(dto.getWeight());
+        command.setTimeoutMs(dto.getTimeoutMs());
+        command.setMaxRetry(dto.getMaxRetry());
+        command.setEnabled(dto.getEnabled());
+        return command;
     }
 }

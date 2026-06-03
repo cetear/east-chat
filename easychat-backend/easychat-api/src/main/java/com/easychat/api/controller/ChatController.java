@@ -2,7 +2,8 @@ package com.easychat.api.controller;
 
 import com.easychat.api.dto.ChatRequest;
 import com.easychat.core.facade.AgentFacade;
-import com.easychat.infra.mysql.entity.ChatSessionDO;
+import com.easychat.core.domain.chat.ChatSession;
+import com.easychat.core.service.chat.SessionView;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -20,7 +21,7 @@ public class ChatController {
 
     @PostMapping("/chat/stream")
     public SseEmitter streamChat(@RequestBody ChatRequest request) {
-        ChatSessionDO session;
+        ChatSession session;
         if (request.getSessionId() != null) {
             session = agentFacade.getSession(request.getSessionId());
         } else {
@@ -34,7 +35,7 @@ public class ChatController {
     @PostMapping("/chat")
     public ResponseEntity<Map<String, Object>> chat(@RequestBody ChatRequest request) {
         try {
-            ChatSessionDO session;
+            ChatSession session;
             if (request.getSessionId() != null) {
                 session = agentFacade.getSession(request.getSessionId());
             } else {
@@ -54,27 +55,27 @@ public class ChatController {
     }
 
     @PostMapping("/session")
-    public ResponseEntity<ChatSessionDO> createSession(@RequestBody Map<String, String> request) {
+    public ResponseEntity<SessionView> createSession(@RequestBody Map<String, String> request) {
         String modelType = request.get("modelType");
-        ChatSessionDO session = agentFacade.createSession(modelType);
-        return ResponseEntity.ok(session);
+        ChatSession session = agentFacade.createSession(modelType);
+        return ResponseEntity.ok(SessionView.from(session));
     }
 
     @GetMapping("/sessions")
-    public ResponseEntity<List<ChatSessionDO>> getSessions() {
-        return ResponseEntity.ok(agentFacade.getSessions());
+    public ResponseEntity<List<SessionView>> getSessions() {
+        return ResponseEntity.ok(agentFacade.getSessions().stream().map(SessionView::from).toList());
     }
 
     @GetMapping("/session/{sessionId}")
-    public ResponseEntity<ChatSessionDO> getSession(@PathVariable String sessionId) {
-        return ResponseEntity.ok(agentFacade.getSession(sessionId));
+    public ResponseEntity<SessionView> getSession(@PathVariable String sessionId) {
+        return ResponseEntity.ok(SessionView.from(agentFacade.getSession(sessionId)));
     }
 
     @PutMapping("/session/{sessionId}")
-    public ResponseEntity<ChatSessionDO> updateSession(@PathVariable String sessionId, @RequestBody ChatSessionDO session) {
+    public ResponseEntity<SessionView> updateSession(@PathVariable String sessionId, @RequestBody ChatSession session) {
         session.setSessionCode(sessionId);
         agentFacade.updateSession(session);
-        return ResponseEntity.ok(session);
+        return ResponseEntity.ok(SessionView.from(session));
     }
 
     @DeleteMapping("/session/{sessionId}")
@@ -84,10 +85,10 @@ public class ChatController {
     }
 
     @PutMapping("/session/{sessionId}/max-rounds")
-    public ResponseEntity<ChatSessionDO> setMaxRounds(@PathVariable String sessionId, @RequestBody Map<String, Integer> request) {
-        ChatSessionDO session = agentFacade.getSession(sessionId);
+    public ResponseEntity<SessionView> setMaxRounds(@PathVariable String sessionId, @RequestBody Map<String, Integer> request) {
+        ChatSession session = agentFacade.getSession(sessionId);
         session.setMaxRounds(request.get("maxRounds"));
         agentFacade.updateSession(session);
-        return ResponseEntity.ok(session);
+        return ResponseEntity.ok(SessionView.from(session));
     }
 }

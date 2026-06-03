@@ -7,7 +7,7 @@
 
     <parent>
         <groupId>com.easychat</groupId>
-        <artifactId>easychat-parent</artifactId>
+        <artifactId>easychat-backend</artifactId>
         <version>1.0.0</version>
     </parent>
 
@@ -15,7 +15,7 @@
     <packaging>jar</packaging>
 
     <name>EasyChat Infrastructure</name>
-    <description>Infrastructure layer: MySQL, Elasticsearch, Kafka</description>
+    <description>Infrastructure layer: MySQL, Elasticsearch</description>
 
     <dependencies>
         <!-- Internal Dependencies -->
@@ -51,12 +51,6 @@
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
-        </dependency>
-
-        <!-- Spring Kafka -->
-        <dependency>
-            <groupId>org.springframework.kafka</groupId>
-            <artifactId>spring-kafka</artifactId>
         </dependency>
 
         <!-- Lombok -->

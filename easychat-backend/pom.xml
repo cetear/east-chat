@@ -6,7 +6,7 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>com.easychat</groupId>
-    <artifactId>easychat-parent</artifactId>
+    <artifactId>easychat-backend</artifactId>
     <version>1.0.0</version>
     <packaging>pom</packaging>
 
@@ -47,9 +47,6 @@
         <!-- Elasticsearch -->
         <elasticsearch.version>8.13.0</elasticsearch.version>
 
-        <!-- Kafka -->
-        <kafka.version>3.6.1</kafka.version>
-
         <!-- Utilities -->
         <lombok.version>1.18.30</lombok.version>
         <jackson.version>2.15.3</jackson.version>
@@ -58,6 +55,14 @@
         <!-- Resilience4j -->
         <resilience4j.version>2.2.0</resilience4j.version>
     </properties>
+    <dependencies>
+        <!-- 阿里巴巴数据库连接池 -->
+        <dependency>
+            <groupId>com.alibaba</groupId>
+            <artifactId>druid-spring-boot-starter</artifactId>
+            <version>1.2.20</version>
+        </dependency>
+    </dependencies>
 
     <dependencyManagement>
         <dependencies>
@@ -182,13 +187,6 @@
                 <groupId>org.projectlombok</groupId>
                 <artifactId>lombok</artifactId>
                 <version>${lombok.version}</version>
-            </dependency>
-
-            <!-- 阿里巴巴数据库连接池 -->
-            <dependency>
-                <groupId>com.alibaba</groupId>
-                <artifactId>druid-spring-boot-starter</artifactId>
-                <version>1.2.20</version>
             </dependency>
         </dependencies>
     </dependencyManagement>

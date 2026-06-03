@@ -1,8 +1,8 @@
 package com.easychat.test;
 
 import com.easychat.app.EasyChatApplication;
+import com.easychat.core.domain.chat.ChatSession;
 import com.easychat.core.facade.AgentFacade;
-import com.easychat.infra.mysql.entity.ChatSessionDO;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -17,10 +17,10 @@ public class AgentFacadeTest {
 
     @Test
     public void testCreateSession() {
-        ChatSessionDO session = agentFacade.createSession("gpt-4");
+        ChatSession session = agentFacade.createSession("gpt-4");
         assertNotNull(session);
-        assertNotNull(session.getSessionId());
-        assertEquals("gpt-4", session.getModelType());
+        assertNotNull(session.getSessionCode());
+        assertEquals("gpt-4", session.getModelCode());
     }
 
     @Test

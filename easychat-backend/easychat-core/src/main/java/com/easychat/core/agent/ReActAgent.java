@@ -1,6 +1,8 @@
 package com.easychat.core.agent;
 
 import com.easychat.core.context.AgentContext;
+import com.easychat.core.context.ChatExecutionContext;
+import com.easychat.core.port.ChatModelClient;
 import com.easychat.llm.client.LLMClient;
 import com.easychat.memory.ConversationMemory;
 import com.easychat.infra.mysql.entity.ChatMessageDO;
@@ -27,6 +29,9 @@ public class ReActAgent implements StreamingAgent {
     @Autowired
     private LLMClient llmClient;
 
+    @Autowired(required = false)
+    private ChatModelClient chatModelClient;
+
     @Autowired
     private ConversationMemory conversationMemory;
 
@@ -37,7 +42,7 @@ public class ReActAgent implements StreamingAgent {
     public AgentResult run(AgentContext context) {
         try {
             String prompt = buildPrompt(context);
-            String response = llmClient.chat(prompt);
+            String response = chat(prompt, context);
             return AgentResult.success(response);
         } catch (Exception e) {
             log.error("Agent execution failed", e);
@@ -67,7 +72,7 @@ public class ReActAgent implements StreamingAgent {
     private Flux<AgentEvent> simpleStreamRun(AgentContext context) {
         try {
             String prompt = buildPrompt(context);
-            return llmClient.streamChat(prompt).map(AgentEvent::message);
+            return streamChat(prompt, context).map(AgentEvent::message);
         } catch (Exception e) {
             log.error("Simple streaming failed", e);
             return Flux.error(e);
@@ -85,7 +90,7 @@ public class ReActAgent implements StreamingAgent {
 
                 for (int i = 0; i < context.getMaxIterations(); i++) {
                     // 同步调用 LLM 进行推理
-                    String llmResponse = llmClient.chat(conversation.toString());
+                    String llmResponse = chat(conversation.toString(), context);
                     ReActStep step = ReActOutputParser.parse(llmResponse);
 
                     // 发射 Thought 事件
@@ -167,6 +172,27 @@ public class ReActAgent implements StreamingAgent {
         prompt.append("Assistant: ");
 
         return prompt.toString();
+    }
+
+    private String chat(String prompt, AgentContext context) {
+        ChatExecutionContext executionContext = getExecutionContext(context);
+        if (chatModelClient != null && executionContext != null) {
+            return chatModelClient.chat(prompt, executionContext);
+        }
+        return llmClient.chat(prompt);
+    }
+
+    private Flux<String> streamChat(String prompt, AgentContext context) {
+        ChatExecutionContext executionContext = getExecutionContext(context);
+        if (chatModelClient != null && executionContext != null) {
+            return chatModelClient.streamChat(prompt, executionContext);
+        }
+        return llmClient.streamChat(prompt);
+    }
+
+    private ChatExecutionContext getExecutionContext(AgentContext context) {
+        Object value = context.getVariable("chatExecutionContext");
+        return value instanceof ChatExecutionContext executionContext ? executionContext : null;
     }
 
     /**
