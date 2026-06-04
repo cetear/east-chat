@@ -32,7 +32,6 @@ CREATE TABLE chat_session_config (
     UNIQUE KEY uk_session (session_id) COMMENT '每个会话仅一份配置',
     CONSTRAINT fk_session_config
         FOREIGN KEY (session_id) REFERENCES chat_session(id) ON DELETE CASCADE
-        COMMENT '外键：会话删除时自动删除配置'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='会话推理参数配置表';
 
 CREATE TABLE chat_message (
@@ -57,7 +56,6 @@ CREATE TABLE chat_message (
     INDEX idx_created (created_at) COMMENT '时间索引（用于统计/归档）',
     CONSTRAINT fk_message_session
         FOREIGN KEY (session_id) REFERENCES chat_session(id) ON DELETE CASCADE
-        COMMENT '外键：删除会话时自动删除消息'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='聊天消息表';
 
 CREATE TABLE model (
