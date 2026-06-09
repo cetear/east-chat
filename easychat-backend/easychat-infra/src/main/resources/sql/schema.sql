@@ -59,13 +59,22 @@ CREATE TABLE chat_message (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='聊天消息表';
 
 CREATE TABLE model (
-    id              BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID',
-    model_code      VARCHAR(64) NOT NULL UNIQUE COMMENT '模型唯一标识（如 gpt-4o）',
-    max_tokens      INT COMMENT '模型最大token限制（用于校验）',
-    default_config  JSON COMMENT '模型默认参数（兜底配置）',
-    enabled         TINYINT DEFAULT 1 COMMENT '是否启用：1=启用 0=禁用',
-    created_at      DATETIME(3) COMMENT '创建时间',
-    updated_at      DATETIME(3) COMMENT '更新时间'
+    id                    BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID',
+    model_code            VARCHAR(64) NOT NULL UNIQUE COMMENT '模型唯一编码，如 deepseek-chat / gpt-4o',
+    model_name            VARCHAR(128) COMMENT '模型展示名称',
+    model_type            VARCHAR(32) NOT NULL DEFAULT 'chat' COMMENT '模型类型：chat/embedding/rerank/image/audio',
+    model_family          VARCHAR(64) COMMENT '模型系列，如 deepseek/gpt/claude/qwen',
+    context_window        INT COMMENT '上下文窗口 token 上限',
+    max_output_tokens     INT COMMENT '最大输出 token 上限',
+    default_temperature   DECIMAL(4,3) COMMENT '默认 temperature',
+    default_top_p         DECIMAL(4,3) COMMENT '默认 top_p',
+    default_config        JSON COMMENT '模型默认扩展参数，如 stop/seed/response_format/reasoning_effort',
+    enabled               TINYINT DEFAULT 1 COMMENT '是否启用：1=启用 0=禁用',
+    created_at            DATETIME(3) COMMENT '创建时间',
+    updated_at            DATETIME(3) COMMENT '更新时间',
+    INDEX idx_model_type (model_type),
+    INDEX idx_model_family (model_family),
+    INDEX idx_enabled (enabled)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='模型定义表';
 
 CREATE TABLE provider (

@@ -1,5 +1,6 @@
 package com.easychat.llm.provider;
 
+import com.easychat.llm.client.LLMCallOptions;
 import reactor.core.publisher.Flux;
 
 /**
@@ -14,8 +15,16 @@ public interface LLMProvider {
     /** 同步对话 */
     String chat(String prompt);
 
+    default String chat(String prompt, LLMCallOptions options) {
+        return chat(prompt);
+    }
+
     /** 流式对话，逐 token 发射 */
     Flux<String> streamChat(String prompt);
+
+    default Flux<String> streamChat(String prompt, LLMCallOptions options) {
+        return streamChat(prompt);
+    }
 
     /** 健康检查（可扩展为主动探测） */
     default boolean isHealthy() {

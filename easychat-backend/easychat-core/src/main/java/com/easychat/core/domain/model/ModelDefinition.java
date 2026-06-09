@@ -2,13 +2,20 @@ package com.easychat.core.domain.model;
 
 import lombok.Data;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Data
 public class ModelDefinition {
     private Long id;
     private String modelCode;
-    private Integer maxTokens;
+    private String modelName;
+    private String modelType;
+    private String modelFamily;
+    private Integer contextWindow;
+    private Integer maxOutputTokens;
+    private BigDecimal defaultTemperature;
+    private BigDecimal defaultTopP;
     private String defaultConfig;
     private Integer enabled;
     private LocalDateTime createdAt;

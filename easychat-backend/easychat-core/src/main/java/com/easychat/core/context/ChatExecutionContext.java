@@ -2,6 +2,8 @@ package com.easychat.core.context;
 
 import lombok.Data;
 
+import java.math.BigDecimal;
+
 @Data
 public class ChatExecutionContext {
     private String traceId;
@@ -12,6 +14,10 @@ public class ChatExecutionContext {
     private Long sessionId;
     private String modelCode;
     private String providerCode;
+    private Integer maxOutputTokens;
+    private BigDecimal defaultTemperature;
+    private BigDecimal defaultTopP;
+    private String defaultConfig;
     private boolean toolsEnabled;
     private boolean ragEnabled;
 

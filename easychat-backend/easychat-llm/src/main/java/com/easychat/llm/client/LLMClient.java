@@ -8,8 +8,16 @@ public interface LLMClient {
      */
     String chat(String prompt);
 
+    default String chat(String prompt, LLMCallOptions options) {
+        return chat(prompt);
+    }
+
     /**
      * 流式聊天
      */
     Flux<String> streamChat(String prompt);
+
+    default Flux<String> streamChat(String prompt, LLMCallOptions options) {
+        return streamChat(prompt);
+    }
 }

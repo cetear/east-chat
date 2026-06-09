@@ -8,9 +8,11 @@ import com.easychat.core.capability.AgentResponse;
 import com.easychat.core.context.ChatExecutionContext;
 import com.easychat.core.domain.chat.ChatMessage;
 import com.easychat.core.domain.chat.ChatSession;
+import com.easychat.core.domain.model.ModelDefinition;
 import com.easychat.core.event.ChatCompletedEvent;
 import com.easychat.core.port.ChatEventPublisher;
 import com.easychat.core.port.ChatMessageRepository;
+import com.easychat.core.port.ModelCatalogRepository;
 import com.easychat.core.port.ChatSessionRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -35,6 +37,9 @@ public class StreamChatUseCase {
 
     @Autowired
     private ChatEventPublisher chatEventPublisher;
+
+    @Autowired
+    private ModelCatalogRepository modelCatalogRepository;
 
     @Autowired
     private AgentCapabilityRegistry agentCapabilityRegistry;
@@ -88,9 +93,24 @@ public class StreamChatUseCase {
         context.setSessionId(session.getId());
         context.setSessionCode(session.getSessionCode());
         context.setModelCode(session.getModelCode());
+        applyModelDefaults(context);
         context.setToolsEnabled(command.isToolsEnabled());
         context.setRagEnabled(command.isRagEnabled());
         return context;
+    }
+
+    private void applyModelDefaults(ChatExecutionContext context) {
+        if (context.getModelCode() == null) {
+            return;
+        }
+        ModelDefinition model = modelCatalogRepository.findModelByCode(context.getModelCode());
+        if (model == null || model.getEnabled() != null && model.getEnabled() == 0) {
+            return;
+        }
+        context.setMaxOutputTokens(model.getMaxOutputTokens());
+        context.setDefaultTemperature(model.getDefaultTemperature());
+        context.setDefaultTopP(model.getDefaultTopP());
+        context.setDefaultConfig(model.getDefaultConfig());
     }
 
     private AgentRequest buildAgentRequest(ChatCommand command, ChatSession session) {

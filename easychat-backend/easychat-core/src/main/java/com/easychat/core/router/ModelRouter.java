@@ -1,11 +1,16 @@
 package com.easychat.core.router;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.easychat.core.context.ChatExecutionContext;
 import com.easychat.core.port.ChatModelClient;
+import com.easychat.llm.client.LLMCallOptions;
 import com.easychat.llm.client.LLMClient;
 import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Flux;
 
+import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -23,6 +28,8 @@ import java.util.List;
  */
 @Slf4j
 public class ModelRouter implements LLMClient, ChatModelClient {
+
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     /** 调用方在使用前通过此 ThreadLocal 指定模型，调用结束后需 clear */
     public static final ThreadLocal<String> MODEL_CODE_HOLDER = new ThreadLocal<>();
@@ -47,14 +54,18 @@ public class ModelRouter implements LLMClient, ChatModelClient {
 
     @Override
     public String chat(String prompt) {
-        return chat(prompt, MODEL_CODE_HOLDER.get());
+        return chat(prompt, MODEL_CODE_HOLDER.get(), LLMCallOptions.empty());
     }
 
     public String chat(String prompt, String modelCode) {
+        return chat(prompt, modelCode, LLMCallOptions.empty());
+    }
+
+    public String chat(String prompt, String modelCode, LLMCallOptions options) {
         List<ProviderWrapper> providers = modelCode != null ? registry.getProviders(modelCode) : List.of();
 
         if (providers.isEmpty()) {
-            return fallbackClient.chat(prompt);
+            return fallbackClient.chat(prompt, options);
         }
 
         Exception lastError = null;
@@ -64,7 +75,7 @@ public class ModelRouter implements LLMClient, ChatModelClient {
                 continue;
             }
             try {
-                String result = wrapper.getProvider().chat(prompt);
+                String result = wrapper.getProvider().chat(prompt, options);
                 wrapper.recordSuccess();
                 return result;
             } catch (Exception e) {
@@ -78,27 +89,31 @@ public class ModelRouter implements LLMClient, ChatModelClient {
 
     @Override
     public String chat(String prompt, ChatExecutionContext context) {
-        return chat(prompt, context != null ? context.getModelCode() : null);
+        return chat(prompt, context != null ? context.getModelCode() : null, toCallOptions(context));
     }
 
     @Override
     public Flux<String> streamChat(String prompt) {
-        return streamChat(prompt, MODEL_CODE_HOLDER.get());
+        return streamChat(prompt, MODEL_CODE_HOLDER.get(), LLMCallOptions.empty());
     }
 
     public Flux<String> streamChat(String prompt, String modelCode) {
+        return streamChat(prompt, modelCode, LLMCallOptions.empty());
+    }
+
+    public Flux<String> streamChat(String prompt, String modelCode, LLMCallOptions options) {
         List<ProviderWrapper> providers = modelCode != null ? registry.getProviders(modelCode) : List.of();
 
         if (providers.isEmpty()) {
-            return fallbackClient.streamChat(prompt);
+            return fallbackClient.streamChat(prompt, options);
         }
 
-        return Flux.create(sink -> attemptStream(providers, 0, new StringBuilder(), prompt, sink));
+        return Flux.create(sink -> attemptStream(providers, 0, new StringBuilder(), prompt, options, sink));
     }
 
     @Override
     public Flux<String> streamChat(String prompt, ChatExecutionContext context) {
-        return streamChat(prompt, context != null ? context.getModelCode() : null);
+        return streamChat(prompt, context != null ? context.getModelCode() : null, toCallOptions(context));
     }
 
     // ------------------------------------------------------------------ //
@@ -109,6 +124,7 @@ public class ModelRouter implements LLMClient, ChatModelClient {
                                int index,
                                StringBuilder partial,
                                String originalPrompt,
+                               LLMCallOptions options,
                                reactor.core.publisher.FluxSink<String> sink) {
         if (index >= providers.size()) {
             sink.error(new RuntimeException("All providers exhausted during streaming"));
@@ -119,7 +135,7 @@ public class ModelRouter implements LLMClient, ChatModelClient {
 
         if (!wrapper.isAvailable()) {
             log.debug("[{}] skipped (circuit open)", wrapper.getProvider().getProviderCode());
-            attemptStream(providers, index + 1, partial, originalPrompt, sink);
+            attemptStream(providers, index + 1, partial, originalPrompt, options, sink);
             return;
         }
 
@@ -127,7 +143,7 @@ public class ModelRouter implements LLMClient, ChatModelClient {
                 ? originalPrompt
                 : buildContinuationPrompt(originalPrompt, partial.toString());
 
-        wrapper.getProvider().streamChat(effectivePrompt)
+        wrapper.getProvider().streamChat(effectivePrompt, options)
                 .subscribe(
                         token -> {
                             partial.append(token);
@@ -138,7 +154,7 @@ public class ModelRouter implements LLMClient, ChatModelClient {
                                     wrapper.getProvider().getProviderCode(), partial.length(), error.getMessage());
                             wrapper.recordFailure();
                             // 无缝切换到下一渠道
-                            attemptStream(providers, index + 1, partial, originalPrompt, sink);
+                            attemptStream(providers, index + 1, partial, originalPrompt, options, sink);
                         },
                         () -> {
                             wrapper.recordSuccess();
@@ -157,5 +173,72 @@ public class ModelRouter implements LLMClient, ChatModelClient {
                 + "【已生成内容（请勿重复，直接从此处继续）】\n"
                 + "..." + tail
                 + "\n\n请保持语义和风格一致，继续生成剩余内容：\nAssistant: ";
+    }
+
+    private LLMCallOptions toCallOptions(ChatExecutionContext context) {
+        if (context == null) {
+            return LLMCallOptions.empty();
+        }
+        LLMCallOptions options = new LLMCallOptions();
+        options.setModelName(context.getModelCode());
+        options.setMaxTokens(context.getMaxOutputTokens());
+        options.setTemperature(toDouble(context.getDefaultTemperature()));
+        options.setTopP(toDouble(context.getDefaultTopP()));
+        applyDefaultConfig(options, context.getDefaultConfig());
+        return options;
+    }
+
+    private Double toDouble(BigDecimal value) {
+        return value != null ? value.doubleValue() : null;
+    }
+
+    private void applyDefaultConfig(LLMCallOptions options, String defaultConfig) {
+        if (defaultConfig == null || defaultConfig.isBlank()) {
+            return;
+        }
+        try {
+            JsonNode root = OBJECT_MAPPER.readTree(defaultConfig);
+            if (root.hasNonNull("stop")) {
+                options.setStop(readStop(root.get("stop")));
+            }
+            if (root.hasNonNull("response_format")) {
+                options.setResponseFormat(readResponseFormat(root.get("response_format")));
+            }
+            if (root.hasNonNull("seed")) {
+                options.setSeed(root.get("seed").asInt());
+            }
+            if (root.hasNonNull("presence_penalty")) {
+                options.setPresencePenalty(root.get("presence_penalty").asDouble());
+            }
+            if (root.hasNonNull("frequency_penalty")) {
+                options.setFrequencyPenalty(root.get("frequency_penalty").asDouble());
+            }
+        } catch (Exception e) {
+            log.warn("Invalid model default_config ignored: {}", e.getMessage());
+        }
+    }
+
+    private List<String> readStop(JsonNode node) {
+        if (node.isTextual()) {
+            return List.of(node.asText());
+        }
+        if (!node.isArray()) {
+            return null;
+        }
+        List<String> values = new ArrayList<>();
+        node.forEach(item -> {
+            if (item.isTextual()) {
+                values.add(item.asText());
+            }
+        });
+        return values.isEmpty() ? null : values;
+    }
+
+    private String readResponseFormat(JsonNode node) {
+        if (node.isTextual()) {
+            return node.asText();
+        }
+        JsonNode type = node.get("type");
+        return type != null && type.isTextual() ? type.asText() : null;
     }
 }

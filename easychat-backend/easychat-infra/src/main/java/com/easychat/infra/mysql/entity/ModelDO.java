@@ -3,6 +3,7 @@ package com.easychat.infra.mysql.entity;
 import com.baomidou.mybatisplus.annotation.*;
 import lombok.Data;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @TableName("model")
@@ -15,8 +16,26 @@ public class ModelDO {
     @TableField("model_code")
     private String modelCode;
 
-    @TableField("max_tokens")
-    private Integer maxTokens;
+    @TableField("model_name")
+    private String modelName;
+
+    @TableField("model_type")
+    private String modelType;
+
+    @TableField("model_family")
+    private String modelFamily;
+
+    @TableField("context_window")
+    private Integer contextWindow;
+
+    @TableField("max_output_tokens")
+    private Integer maxOutputTokens;
+
+    @TableField("default_temperature")
+    private BigDecimal defaultTemperature;
+
+    @TableField("default_top_p")
+    private BigDecimal defaultTopP;
 
     @TableField("default_config")
     private String defaultConfig;

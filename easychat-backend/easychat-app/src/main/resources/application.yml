@@ -44,7 +44,7 @@ mybatis-plus:
 # LangChain4j LLM config
 easychat:
   llm:
-    api-key: ${OPENAI_API_KEY:XXXXXXXXXXXX}
+    api-key: ${OPENAI_API_KEY:sk-31cf248a9db24800a7e769e106ccdcc8}
     base-url: ${OPENAI_BASE_URL:https://api.deepseek.com/v1}
     model-name: ${OPENAI_MODEL:deepseek-chat}
     temperature: 0.7

@@ -1,8 +1,10 @@
 package com.easychat.core.router;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.easychat.infra.mysql.entity.ModelDO;
 import com.easychat.infra.mysql.entity.ModelProviderDO;
 import com.easychat.infra.mysql.entity.ProviderDO;
+import com.easychat.infra.mysql.mapper.ModelMapper;
 import com.easychat.infra.mysql.mapper.ModelProviderMapper;
 import com.easychat.infra.mysql.mapper.ProviderMapper;
 import com.easychat.llm.provider.OpenAICompatibleProvider;
@@ -29,6 +31,7 @@ public class ProviderRegistry {
 
     private final ModelProviderMapper modelProviderMapper;
     private final ProviderMapper providerMapper;
+    private final ModelMapper modelMapper;
 
     /** model_code → sorted ProviderWrapper list */
     private volatile Map<String, List<ProviderWrapper>> cache = new ConcurrentHashMap<>();
@@ -49,15 +52,24 @@ public class ProviderRegistry {
             List<ModelProviderDO> configs = modelProviderMapper
                     .selectList(new LambdaQueryWrapper<ModelProviderDO>().eq(ModelProviderDO::getEnabled, 1));
 
+            Map<String, ModelDO> modelMap = modelMapper
+                    .selectList(new LambdaQueryWrapper<ModelDO>().eq(ModelDO::getEnabled, 1))
+                    .stream()
+                    .collect(Collectors.toMap(ModelDO::getModelCode, m -> m));
+
             Map<String, List<ProviderWrapper>> newCache = configs.stream()
                     .filter(cfg -> providerMap.containsKey(cfg.getProviderCode()))
+                    .filter(cfg -> modelMap.containsKey(cfg.getModelCode()))
                     .collect(Collectors.groupingBy(
                             ModelProviderDO::getModelCode,
                             Collectors.collectingAndThen(
                                     Collectors.toList(),
                                     list -> list.stream()
                                             .sorted((a, b) -> Integer.compare(a.getPriority(), b.getPriority()))
-                                            .map(cfg -> buildWrapper(cfg, providerMap.get(cfg.getProviderCode())))
+                                            .map(cfg -> buildWrapper(
+                                                    cfg,
+                                                    providerMap.get(cfg.getProviderCode()),
+                                                    modelMap.get(cfg.getModelCode())))
                                             .collect(Collectors.toList())
                             )
                     ));
@@ -73,14 +85,15 @@ public class ProviderRegistry {
         return cache.getOrDefault(modelCode, Collections.emptyList());
     }
 
-    private ProviderWrapper buildWrapper(ModelProviderDO cfg, ProviderDO provider) {
+    private ProviderWrapper buildWrapper(ModelProviderDO cfg, ProviderDO provider, ModelDO model) {
         var llmProvider = new OpenAICompatibleProvider(
                 cfg.getProviderCode(),
                 provider.getApiKey(),
                 provider.getBaseUrl(),
-                cfg.getModelCode(),    // modelName = modelCode（可扩展）
-                0.7,
-                cfg.getModelCode() != null ? 2000 : 2000,
+                cfg.getModelCode(),
+                toDouble(model.getDefaultTemperature()),
+                toDouble(model.getDefaultTopP()),
+                model.getMaxOutputTokens(),
                 cfg.getTimeoutMs() != null ? cfg.getTimeoutMs() : 60_000
         );
         return new ProviderWrapper(
@@ -90,5 +103,9 @@ public class ProviderRegistry {
                 3,
                 30
         );
+    }
+
+    private Double toDouble(java.math.BigDecimal value) {
+        return value != null ? value.doubleValue() : null;
     }
 }
