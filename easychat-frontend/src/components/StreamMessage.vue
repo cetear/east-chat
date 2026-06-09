@@ -40,16 +40,12 @@ import { marked } from 'marked'
 import ThoughtBlock from './ThoughtBlock.vue'
 import ToolCard from './ToolCard.vue'
 import ObservationBlock from './ObservationBlock.vue'
+import type { StreamEventMessage } from '@/types/message'
 
 const props = defineProps<{
   content: string
   loading: boolean
-  streamingEvents?: Array<{
-    type: string
-    content: string
-    toolName?: string
-    toolInput?: Record<string, unknown>
-  }>
+  streamingEvents?: StreamEventMessage[]
 }>()
 
 const renderedContent = computed(() => {

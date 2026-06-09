@@ -1,22 +1,24 @@
 <template>
   <div class="chat-input-container">
     <div class="input-row">
-      <el-tooltip content="Upload file (coming soon)" placement="top">
+      <el-tooltip content="文件上传功能暂未开放" placement="top">
         <button class="upload-button" disabled>
           &#x1F4CE;
         </button>
       </el-tooltip>
+
       <textarea
         v-model="message"
-        placeholder="请输入消息... (Enter 发送，Shift+Enter 换行)"
         :disabled="disabled"
         class="text-input"
         rows="1"
+        placeholder="请输入消息...（Enter 发送，Shift+Enter 换行）"
         @keydown.enter.exact.prevent="handleSend"
       />
+
       <button
         class="send-button"
-        :disabled="disabled"
+        :disabled="disabled || !message.trim()"
         @click="handleSend"
       >
         发送
@@ -25,25 +27,25 @@
   </div>
 </template>
 
-<script setup>
-import { ref } from 'vue';
+<script setup lang="ts">
+import { ref } from 'vue'
 
-const props = defineProps({
-  disabled: {
-    type: Boolean,
-    default: false
-  }
-});
+const props = defineProps<{
+  disabled?: boolean
+}>()
 
-const emit = defineEmits(['send']);
-const message = ref('');
+const emit = defineEmits<{
+  send: [message: string]
+}>()
 
-const handleSend = () => {
-  if (props.disabled) return;
-  if (!message.value.trim()) return;
-  emit('send', message.value);
-  message.value = '';
-};
+const message = ref('')
+
+function handleSend(): void {
+  if (props.disabled || !message.value.trim()) return
+
+  emit('send', message.value)
+  message.value = ''
+}
 </script>
 
 <style scoped>
@@ -93,7 +95,7 @@ const handleSend = () => {
 }
 
 .send-button {
-  width: 40px;
+  width: 48px;
   height: 40px;
   padding: 0;
   border: none;

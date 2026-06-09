@@ -1,9 +1,16 @@
-export type MessageType = 'text' | 'thought' | 'action' | 'observation'
+export type ChatRole = 'user' | 'assistant' | 'system'
 
-export interface Message {
+export interface ChatMessage {
+  role: ChatRole
+  content: string
+}
+
+export type StreamEventType = 'thought' | 'action' | 'observation'
+
+export interface StreamEventMessage {
   id: string
-  role: 'user' | 'assistant'
-  type: MessageType
+  role: 'assistant'
+  type: StreamEventType
   content: string
   toolName?: string
   toolInput?: Record<string, unknown>
@@ -11,16 +18,37 @@ export interface Message {
   timestamp: number
 }
 
-export interface Session {
+export interface SessionView {
   id: number
-  sessionId: string
+  sessionCode: string
   title: string
-  modelType: string
-  summary?: string
+  modelCode: string
+  systemPrompt: string | null
   maxRounds: number
-  messages: Message[]
-  createdAt: number
-  updatedAt: number
+  status: number
+  createdAt: string
+  updatedAt: string
+}
+
+export interface SessionDetail extends SessionView {
+  messages?: ChatMessage[]
+}
+
+export interface ChatSession extends SessionView {
+  messages: ChatMessage[]
+}
+
+export interface ChatRequest {
+  sessionId?: string | null
+  model?: string
+  messages: ChatMessage[]
+  toolsEnabled?: boolean
+  ragEnabled?: boolean
+}
+
+export interface ChatResponse {
+  content: string
+  sessionId: string
 }
 
 export interface AgentEvent {
@@ -28,23 +56,4 @@ export interface AgentEvent {
   content?: string
   tool?: string
   input?: Record<string, unknown>
-}
-
-export interface ChatRequest {
-  messages: Array<{ role: string; content: string }>
-  model: string
-  sessionId?: string
-  toolsEnabled?: boolean
-  ragEnabled?: boolean
-}
-
-export interface ModelConfig {
-  modelCode: string
-  modelName: string
-  apiKey: string
-  baseUrl: string
-  modelNameApi: string
-  temperature: number
-  maxTokens: number
-  isEnabled: boolean
 }

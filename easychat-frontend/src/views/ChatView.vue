@@ -2,15 +2,20 @@
   <div class="chat-view">
     <ChatSidebar
       :sessions="chatStore.sessions"
-      :activeSessionId="chatStore.activeSessionId"
+      :active-session-id="chatStore.activeSessionId"
       @new-chat="handleNewChat"
       @session-click="handleSessionClick"
       @delete-session="handleDeleteSession"
       @update-session="handleUpdateSession"
     />
+
     <div class="chat-main">
       <div class="chat-header">
-        <h2>{{ chatStore.activeSession?.title || '新会话' }}</h2>
+        <div>
+          <h2>{{ currentTitle }}</h2>
+          <p class="chat-subtitle">{{ currentModelLabel }}</p>
+        </div>
+
         <div class="header-actions">
           <el-button-group>
             <el-button
@@ -20,44 +25,62 @@
               流式输出
             </el-button>
             <el-button
-              :type="!configStore.isStreamingMode ? 'primary' : 'default'"
+              :type="configStore.isStreamingMode ? 'default' : 'primary'"
               @click="configStore.isStreamingMode = false"
             >
               非流式输出
             </el-button>
           </el-button-group>
+
           <el-switch
             v-model="configStore.toolsEnabled"
+            inline-prompt
             active-text="Tools"
-            inactive-text=""
-            style="margin-left: 10px;"
           />
-          <ModelSelector @model-change="handleModelChange" />
-          <el-button type="info" @click="configStore.modelConfigVisible = true">
-            <el-icon><Setting /></el-icon>
-            配置
+
+          <el-switch
+            v-model="configStore.ragEnabled"
+            inline-prompt
+            active-text="RAG"
+          />
+
+          <ModelSelector
+            :model-value="configStore.currentModel"
+            :disabled="chatStore.isStreaming"
+            @update:model-value="handleModelChange"
+          />
+
+          <el-button
+            v-if="chatStore.isStreaming"
+            type="danger"
+            plain
+            @click="handleStopStreaming"
+          >
+            停止生成
           </el-button>
         </div>
       </div>
-      <ModelConfig
-        v-model:visible="configStore.modelConfigVisible"
-        :modelCode="configStore.currentModel"
-        @config-updated="() => {}"
-      />
 
-      <div class="chat-messages" ref="messagesContainer">
+      <div ref="messagesContainer" class="chat-messages">
         <ChatMessage
           v-for="(message, index) in chatStore.currentMessages"
-          :key="index"
+          :key="`${message.role}-${index}`"
           :message="message"
         />
+
         <StreamMessage
           v-if="chatStore.isStreaming"
           :content="chatStore.streamContent"
           :loading="chatStore.isStreaming"
-          :streamingEvents="chatStore.streamingEvents"
+          :streaming-events="chatStore.streamingEvents"
         />
+
+        <div v-if="!chatStore.currentMessages.length && !chatStore.isStreaming" class="empty-state">
+          <h3>开始一段新的对话</h3>
+          <p>输入第一条消息后，后端会自动创建会话。</p>
+        </div>
       </div>
+
       <ChatInput
         :disabled="chatStore.isStreaming"
         @send="handleSendMessage"
@@ -67,25 +90,33 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, nextTick, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Setting } from '@element-plus/icons-vue'
 import ChatSidebar from '@/components/ChatSidebar.vue'
 import ChatMessage from '@/components/ChatMessage.vue'
-import StreamMessage from '@/components/StreamMessage.vue'
 import ChatInput from '@/components/ChatInput.vue'
 import ModelSelector from '@/components/ModelSelector.vue'
-import ModelConfig from '@/components/ModelConfig.vue'
+import StreamMessage from '@/components/StreamMessage.vue'
+import { chat, streamChat } from '@/api/chat'
 import { useChatStore } from '@/stores/chatStore'
 import { useConfigStore } from '@/stores/configStore'
-import { streamChat, chat, updateSession } from '@/api/chat'
+import type { ChatMessage as ChatMessageType, SessionView } from '@/types/message'
 import { handleStreamChat } from '@/utils/sse'
 
 const chatStore = useChatStore()
 const configStore = useConfigStore()
 const messagesContainer = ref<HTMLElement | null>(null)
+const activeAbortController = ref<AbortController | null>(null)
 
-const scrollToBottom = () => {
+const currentTitle = computed(() => {
+  return chatStore.activeSession?.title || chatStore.pendingSessionTitle || 'New Chat'
+})
+
+const currentModelLabel = computed(() => {
+  return `当前模型: ${configStore.currentModel}`
+})
+
+function scrollToBottom(): void {
   nextTick(() => {
     if (messagesContainer.value) {
       messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight
@@ -93,127 +124,233 @@ const scrollToBottom = () => {
   })
 }
 
-const handleSendMessage = async (content: string) => {
-  if (!content.trim() || !chatStore.activeSession) return
+function createRequestMessages(content: string): ChatMessageType[] {
+  return [{ role: 'user', content: content.trim() }]
+}
 
-  chatStore.addUserMessage(content)
+async function refreshActiveSession(sessionId: string): Promise<void> {
+  await chatStore.switchSession(sessionId)
+  configStore.setModel(chatStore.activeSession?.modelCode || configStore.currentModel)
+  scrollToBottom()
+}
+
+async function persistSessionTitle(session: SessionView, content: string): Promise<void> {
+  if (session.title && session.title !== 'New Chat') return
+
+  const title = content.slice(0, 20) + (content.length > 20 ? '...' : '')
+  await chatStore.updateSession({
+    ...session,
+    title,
+  })
+}
+
+async function handleStreamSend(content: string): Promise<void> {
+  chatStore.isStreaming = true
+  chatStore.streamContent = ''
+  chatStore.streamingEvents = []
+
+  const controller = new AbortController()
+  activeAbortController.value = controller
+
+  const existingSessionId = chatStore.activeSessionId
+  const requestMessages = createRequestMessages(content)
+
+  if (existingSessionId) {
+    chatStore.addUserMessage(content, existingSessionId)
+  } else {
+    chatStore.pendingSessionTitle = content.trim()
+  }
+
   scrollToBottom()
 
-  // 自动更新会话标题
-  if (chatStore.activeSession.title === '新会话') {
-    chatStore.activeSession.title = content.substring(0, 20) + (content.length > 20 ? '...' : '')
-    await updateSession(chatStore.activeSession.sessionId, chatStore.activeSession)
+  try {
+    const response = await streamChat({
+      sessionId: existingSessionId,
+      model: configStore.currentModel,
+      messages: requestMessages,
+      toolsEnabled: configStore.toolsEnabled,
+      ragEnabled: configStore.ragEnabled,
+    }, controller.signal)
+
+    handleStreamChat(response, {
+      onSession(sessionId) {
+        chatStore.bindSessionFromResponse(sessionId)
+      },
+      onMessage(token) {
+        chatStore.appendStreamContent(token)
+        scrollToBottom()
+      },
+      onThought(data) {
+        chatStore.addStreamingEvent({
+          id: crypto.randomUUID(),
+          role: 'assistant',
+          type: 'thought',
+          content: data.content,
+          timestamp: Date.now(),
+        })
+        scrollToBottom()
+      },
+      onAction(data) {
+        chatStore.addStreamingEvent({
+          id: crypto.randomUUID(),
+          role: 'assistant',
+          type: 'action',
+          content: '',
+          toolName: data.tool,
+          toolInput: data.input,
+          timestamp: Date.now(),
+        })
+        scrollToBottom()
+      },
+      onObservation(data) {
+        chatStore.addStreamingEvent({
+          id: crypto.randomUUID(),
+          role: 'assistant',
+          type: 'observation',
+          content: data.content,
+          timestamp: Date.now(),
+        })
+        scrollToBottom()
+      },
+      onError(message) {
+        if (message !== 'The user aborted a request.') {
+          ElMessage.error(`消息发送失败: ${message}`)
+        }
+        chatStore.clearStreamingState()
+      },
+      async onFinish() {
+        const sessionId = chatStore.activeSessionId
+        if (sessionId && !existingSessionId) {
+          chatStore.addUserMessage(content, sessionId)
+          await refreshActiveSession(sessionId)
+          const session = chatStore.activeSession
+          if (session) {
+            await persistSessionTitle(session, content)
+          }
+        }
+
+        chatStore.finalizeAssistantMessage()
+        if (sessionId) {
+          await refreshActiveSession(sessionId)
+        }
+        scrollToBottom()
+      },
+    })
+  } catch (error) {
+    if ((error as Error).name !== 'AbortError') {
+      ElMessage.error((error as Error).message || '消息发送失败，请重试')
+    }
+    chatStore.clearStreamingState()
+  } finally {
+    activeAbortController.value = null
   }
+}
+
+async function handleNormalSend(content: string): Promise<void> {
+  chatStore.isStreaming = true
+  const existingSessionId = chatStore.activeSessionId
+  const requestMessages = createRequestMessages(content)
+
+  if (existingSessionId) {
+    chatStore.addUserMessage(content, existingSessionId)
+  } else {
+    chatStore.pendingSessionTitle = content.trim()
+  }
+
+  scrollToBottom()
+
+  try {
+    const response = await chat({
+      sessionId: existingSessionId,
+      model: configStore.currentModel,
+      messages: requestMessages,
+      toolsEnabled: configStore.toolsEnabled,
+      ragEnabled: configStore.ragEnabled,
+    })
+
+    const sessionId = response.sessionId
+    if (!sessionId) {
+      throw new Error('后端未返回 sessionId')
+    }
+
+    if (!existingSessionId) {
+      chatStore.bindSessionFromResponse(sessionId)
+      chatStore.addUserMessage(content, sessionId)
+    }
+
+    chatStore.addAssistantMessage(response.content, sessionId)
+    await refreshActiveSession(sessionId)
+
+    const session = chatStore.activeSession
+    if (session) {
+      await persistSessionTitle(session, content)
+    }
+  } catch (error) {
+    ElMessage.error((error as Error).message || '消息发送失败，请重试')
+  } finally {
+    chatStore.isStreaming = false
+    scrollToBottom()
+  }
+}
+
+async function handleSendMessage(content: string): Promise<void> {
+  if (!content.trim()) return
 
   if (configStore.isStreamingMode) {
-    chatStore.isStreaming = true
-    chatStore.streamContent = ''
-    chatStore.streamingEvents = []
-
-    try {
-      const response = await streamChat({
-        messages: chatStore.activeSession.messages,
-        model: configStore.currentModel,
-        sessionId: chatStore.activeSession.sessionId,
-        toolsEnabled: configStore.toolsEnabled,
-        ragEnabled: configStore.ragEnabled,
-      })
-
-      handleStreamChat(response, {
-        onMessage(token) {
-          chatStore.appendStreamContent(token)
-          scrollToBottom()
-        },
-        onThought(data) {
-          chatStore.addStreamingEvent({
-            id: crypto.randomUUID(), role: 'assistant', type: 'thought',
-            content: data.content, timestamp: Date.now(),
-          })
-          scrollToBottom()
-        },
-        onAction(data) {
-          chatStore.addStreamingEvent({
-            id: crypto.randomUUID(), role: 'assistant', type: 'action',
-            content: '', toolName: data.tool, toolInput: data.input, timestamp: Date.now(),
-          })
-          scrollToBottom()
-        },
-        onObservation(data) {
-          chatStore.addStreamingEvent({
-            id: crypto.randomUUID(), role: 'assistant', type: 'observation',
-            content: data.content, timestamp: Date.now(),
-          })
-          scrollToBottom()
-        },
-        onError(msg) {
-          ElMessage.error('消息发送失败：' + msg)
-          chatStore.clearStreamingState()
-        },
-        async onFinish() {
-          chatStore.finalizeAssistantMessage()
-          await updateSession(chatStore.activeSession!.sessionId, chatStore.activeSession)
-          scrollToBottom()
-        },
-      })
-    } catch (error: any) {
-      ElMessage.error('发送失败，请重试')
-      chatStore.clearStreamingState()
-    }
-  } else {
-    chatStore.isStreaming = true
-    try {
-      const response = await chat({
-        messages: chatStore.activeSession.messages,
-        model: configStore.currentModel,
-        sessionId: chatStore.activeSession.sessionId,
-      }) as any
-
-      if (response.error) {
-        ElMessage.error('AI 响应出错：' + response.error)
-      } else {
-        const aiMsg = { role: 'assistant', content: response.content }
-        chatStore.activeSession.messages = [...chatStore.activeSession.messages, aiMsg]
-        chatStore.currentMessages = [...chatStore.activeSession.messages]
-        await updateSession(chatStore.activeSession.sessionId, chatStore.activeSession)
-        scrollToBottom()
-      }
-    } catch (error: any) {
-      ElMessage.error('发送失败，请重试')
-    } finally {
-      chatStore.isStreaming = false
-    }
+    await handleStreamSend(content)
+    return
   }
+
+  await handleNormalSend(content)
 }
 
-const handleNewChat = async () => {
-  await chatStore.createSession(configStore.currentModel)
+function handleStopStreaming(): void {
+  activeAbortController.value?.abort()
+  chatStore.clearStreamingState()
 }
 
-const handleSessionClick = async (sessionId: string) => {
-  await chatStore.switchSession(sessionId)
-  if (chatStore.activeSession) {
-    configStore.currentModel = chatStore.activeSession.modelType
-  }
+function handleNewChat(): void {
+  chatStore.startDraftSession()
 }
 
-const handleDeleteSession = async (sessionId: string) => {
+async function handleSessionClick(sessionId: string): Promise<void> {
+  await refreshActiveSession(sessionId)
+}
+
+async function handleDeleteSession(sessionId: string): Promise<void> {
   await chatStore.deleteSession(sessionId)
-}
-
-const handleUpdateSession = async (session: any) => {
-  await chatStore.updateSession(session)
-}
-
-const handleModelChange = (model: string) => {
-  configStore.setModel(model)
-  if (chatStore.activeSession) {
-    chatStore.activeSession.modelType = model
-    updateSession(chatStore.activeSession.sessionId, chatStore.activeSession)
+  if (chatStore.activeSessionId) {
+    await refreshActiveSession(chatStore.activeSessionId)
   }
 }
 
-onMounted(() => {
-  chatStore.loadSessions()
+async function handleUpdateSession(session: SessionView): Promise<void> {
+  await chatStore.updateSession(session)
+  if (session.sessionCode === chatStore.activeSessionId) {
+    await refreshActiveSession(session.sessionCode)
+  }
+}
+
+async function handleModelChange(model: string): Promise<void> {
+  configStore.setModel(model)
+  if (!chatStore.activeSession) return
+
+  await chatStore.updateSession({
+    ...chatStore.activeSession,
+    modelCode: model,
+  })
+  await refreshActiveSession(chatStore.activeSession.sessionCode)
+}
+
+onMounted(async () => {
+  await chatStore.loadSessions()
+  if (chatStore.activeSession?.modelCode) {
+    configStore.setModel(chatStore.activeSession.modelCode)
+  }
+})
+
+onBeforeUnmount(() => {
+  activeAbortController.value?.abort()
 })
 </script>
 
@@ -232,23 +369,32 @@ onMounted(() => {
 }
 
 .chat-header {
-  padding: 15px;
+  padding: 15px 20px;
   border-bottom: 1px solid #e0e0e0;
   background-color: #fff;
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 16px;
 }
 
 .chat-header h2 {
   margin: 0;
-  font-size: 18px;
+  font-size: 20px;
+}
+
+.chat-subtitle {
+  margin-top: 4px;
+  color: #909399;
+  font-size: 13px;
 }
 
 .header-actions {
   display: flex;
   gap: 10px;
   align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .chat-messages {
@@ -257,6 +403,17 @@ onMounted(() => {
   padding: 20px;
   display: flex;
   flex-direction: column;
+}
+
+.empty-state {
+  margin: auto;
+  text-align: center;
+  color: #909399;
+}
+
+.empty-state h3 {
+  margin-bottom: 10px;
+  color: #303133;
 }
 
 .chat-messages::-webkit-scrollbar {

@@ -3,37 +3,38 @@
     <div class="sidebar-header">
       <h3>会话列表</h3>
       <el-tooltip content="新建会话" placement="top">
-        <el-button type="primary" size="small" class="new-chat-btn" @click="handleNewChat">
+        <el-button type="primary" size="small" class="new-chat-btn" @click="emit('new-chat')">
           <el-icon><Plus /></el-icon>
           <span>新建</span>
         </el-button>
       </el-tooltip>
     </div>
-    
+
     <div class="session-list" @click="hideContextMenu">
       <div
         v-for="session in paginatedSessions"
-        :key="session.sessionId"
+        :key="session.sessionCode"
         class="session-item"
-        :class="{ 'active': session.sessionId === activeSessionId }"
-        @click="handleSessionClick(session.sessionId)"
+        :class="{ active: session.sessionCode === activeSessionId }"
+        @click="handleSessionClick(session.sessionCode)"
         @contextmenu.prevent="showContextMenu($event, session)"
       >
         <div class="session-info">
           <div class="session-title">
             <el-icon class="session-icon"><ChatRound /></el-icon>
-            <span class="title-text">{{ session.title }}</span>
+            <span class="title-text">{{ session.title || 'New Chat' }}</span>
           </div>
           <div class="session-meta">
-            <span class="session-model">{{ getModelName(session.modelType) }}</span>
+            <span class="session-model">{{ getModelName(session.modelCode) }}</span>
             <span class="session-time">{{ formatTime(session.updatedAt) }}</span>
           </div>
         </div>
-        <div class="session-actions" v-if="session.sessionId === activeSessionId">
+
+        <div class="session-actions" v-if="session.sessionCode === activeSessionId">
           <el-tooltip content="更多操作" placement="top">
-            <el-button 
-              type="text" 
-              size="small" 
+            <el-button
+              type="text"
+              size="small"
               class="more-btn"
               @click.stop="showContextMenu($event, session)"
             >
@@ -42,40 +43,38 @@
           </el-tooltip>
         </div>
       </div>
-      
+
       <div v-if="sessions.length === 0" class="empty-sessions">
         <el-empty description="暂无会话，点击上方新建按钮开始聊天" />
       </div>
     </div>
-    
+
     <div v-if="sessions.length > pageSize" class="pagination">
       <el-pagination
+        v-model:current-page="currentPage"
         small
         layout="prev, pager, next"
         :total="sessions.length"
         :page-size="pageSize"
-        v-model:current-page="currentPage"
         @current-change="handleCurrentChange"
       />
     </div>
-    
-    <!-- 右键菜单 -->
-    <div 
-      v-if="menuVisible" 
-      class="context-menu" 
-      :style="{ left: menuX + 'px', top: menuY + 'px' }"
+
+    <div
+      v-if="menuVisible && selectedSession"
+      class="context-menu"
+      :style="{ left: `${menuX}px`, top: `${menuY}px` }"
     >
       <div class="menu-item" @click="renameSession(selectedSession)">
         <el-icon><Edit /></el-icon>
         <span>重命名</span>
       </div>
-      <div class="menu-item delete" @click="deleteSession(selectedSession)">
+      <div class="menu-item delete" @click="removeSession(selectedSession)">
         <el-icon><Delete /></el-icon>
         <span>删除</span>
       </div>
     </div>
-    
-    <!-- 重命名对话框 -->
+
     <el-dialog
       v-model="renameDialogVisible"
       title="重命名会话"
@@ -84,164 +83,144 @@
     >
       <el-form @submit.prevent="confirmRename">
         <el-form-item label="会话标题">
-          <el-input 
-            v-model="renameTitle" 
+          <el-input
+            ref="renameInput"
+            v-model="renameTitle"
             placeholder="请输入新的会话标题"
             maxlength="50"
             show-word-limit
-            ref="renameInput"
           />
         </el-form-item>
       </el-form>
+
       <template #footer>
         <span class="dialog-footer">
           <el-button @click="renameDialogVisible = false">取消</el-button>
-          <el-button type="primary" @click="confirmRename" :disabled="!renameTitle.trim()">确定</el-button>
+          <el-button type="primary" :disabled="!renameTitle.trim()" @click="confirmRename">
+            确定
+          </el-button>
         </span>
       </template>
     </el-dialog>
   </div>
 </template>
 
-<script setup>
-import { ref, computed, nextTick } from 'vue';
-import { Plus, Edit, Delete, ChatRound, MoreFilled } from '@element-plus/icons-vue';
+<script setup lang="ts">
+import { computed, nextTick, onBeforeUnmount, ref } from 'vue'
+import { ChatRound, Delete, Edit, MoreFilled, Plus } from '@element-plus/icons-vue'
+import type { SessionView } from '@/types/message'
 
-const props = defineProps({
-  activeSessionId: {
-    type: String,
-    default: ''
-  },
-  sessions: {
-    type: Array,
-    default: () => []
-  }
-});
+const props = defineProps<{
+  activeSessionId: string | null
+  sessions: SessionView[]
+}>()
 
-const emit = defineEmits(['new-chat', 'session-click', 'delete-session', 'update-session']);
+const emit = defineEmits<{
+  'new-chat': []
+  'session-click': [sessionId: string]
+  'delete-session': [sessionId: string]
+  'update-session': [session: SessionView]
+}>()
 
-// 分页相关
-const currentPage = ref(1);
-const pageSize = ref(10);
+const currentPage = ref(1)
+const pageSize = ref(10)
+const menuVisible = ref(false)
+const menuX = ref(0)
+const menuY = ref(0)
+const selectedSession = ref<SessionView | null>(null)
+const renameDialogVisible = ref(false)
+const renameTitle = ref('')
+const renameInput = ref<{ focus: () => void } | null>(null)
 
-// 右键菜单相关
-const menuVisible = ref(false);
-const menuX = ref(0);
-const menuY = ref(0);
-const selectedSession = ref(null);
+const modelNameMap: Record<string, string> = {
+  'deepseek-chat': 'DeepSeek Chat',
+  openai: 'OpenAI',
+  claude: 'Claude',
+  gemini: 'Gemini',
+}
 
-// 重命名相关
-const renameDialogVisible = ref(false);
-const renameTitle = ref('');
-const renameInput = ref(null);
-
-// 模型名称映射
-const modelNameMap = {
-  'openai': 'OpenAI',
-  'claude': 'Claude',
-  'gemini': 'Gemini',
-  'deepseek': 'DeepSeek'
-};
-
-// 获取模型显示名称
-const getModelName = (modelType) => {
-  return modelNameMap[modelType] || modelType;
-};
-
-// 计算分页后的会话列表
 const paginatedSessions = computed(() => {
-  const start = (currentPage.value - 1) * pageSize.value;
-  const end = start + pageSize.value;
-  return props.sessions.slice(start, end);
-});
+  const start = (currentPage.value - 1) * pageSize.value
+  return props.sessions.slice(start, start + pageSize.value)
+})
 
-const handleNewChat = () => {
-  emit('new-chat');
-};
+function getModelName(modelCode: string): string {
+  return modelNameMap[modelCode] || modelCode
+}
 
-const handleSessionClick = (sessionId) => {
-  hideContextMenu();
-  emit('session-click', sessionId);
-};
+function handleSessionClick(sessionId: string): void {
+  hideContextMenu()
+  emit('session-click', sessionId)
+}
 
-const formatTime = (timestamp) => {
-  if (!timestamp) return '';
-  const date = new Date(timestamp);
-  const now = new Date();
-  const diff = now - date;
-  
-  // 小于1分钟
-  if (diff < 60000) {
-    return '刚刚';
-  }
-  // 小于1小时
-  if (diff < 3600000) {
-    return Math.floor(diff / 60000) + '分钟前';
-  }
-  // 小于24小时
-  if (diff < 86400000) {
-    return Math.floor(diff / 3600000) + '小时前';
-  }
-  // 小于7天
-  if (diff < 604800000) {
-    return Math.floor(diff / 86400000) + '天前';
-  }
-  
-  return date.toLocaleDateString();
-};
+function formatTime(timestamp: string): string {
+  if (!timestamp) return ''
 
-// 显示右键菜单
-const showContextMenu = (event, session) => {
-  event.stopPropagation();
-  selectedSession.value = session;
-  menuX.value = event.clientX;
-  menuY.value = event.clientY;
-  menuVisible.value = true;
-};
+  const date = new Date(timestamp)
+  const now = new Date()
+  const diff = now.getTime() - date.getTime()
 
-// 隐藏右键菜单
-const hideContextMenu = () => {
-  menuVisible.value = false;
-};
+  if (diff < 60_000) return '刚刚'
+  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)} 分钟前`
+  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)} 小时前`
+  if (diff < 604_800_000) return `${Math.floor(diff / 86_400_000)} 天前`
 
-// 重命名会话
-const renameSession = (session) => {
-  selectedSession.value = session;
-  renameTitle.value = session.title;
-  renameDialogVisible.value = true;
-  menuVisible.value = false;
-  
-  // 自动聚焦输入框
+  return date.toLocaleDateString()
+}
+
+function showContextMenu(event: MouseEvent, session: SessionView): void {
+  event.stopPropagation()
+  selectedSession.value = session
+  menuX.value = event.clientX
+  menuY.value = event.clientY
+  menuVisible.value = true
+}
+
+function hideContextMenu(): void {
+  menuVisible.value = false
+}
+
+function renameSession(session: SessionView): void {
+  selectedSession.value = session
+  renameTitle.value = session.title || ''
+  renameDialogVisible.value = true
+  menuVisible.value = false
+
   nextTick(() => {
-    if (renameInput.value) {
-      renameInput.value.focus();
-    }
-  });
-};
+    renameInput.value?.focus()
+  })
+}
 
-// 确认重命名
-const confirmRename = () => {
-  if (selectedSession.value && renameTitle.value.trim()) {
-    const updatedSession = { ...selectedSession.value, title: renameTitle.value.trim() };
-    emit('update-session', updatedSession);
-    renameDialogVisible.value = false;
-  }
-};
+function confirmRename(): void {
+  if (!selectedSession.value || !renameTitle.value.trim()) return
 
-// 删除会话
-const deleteSession = (session) => {
-  emit('delete-session', session.sessionId);
-  menuVisible.value = false;
-};
+  emit('update-session', {
+    ...selectedSession.value,
+    title: renameTitle.value.trim(),
+  })
 
-// 分页相关事件
-const handleCurrentChange = (current) => {
-  currentPage.value = current;
-  hideContextMenu();
-};
+  renameDialogVisible.value = false
+}
 
-// 点击其他地方隐藏菜单
-window.addEventListener('click', hideContextMenu);
+function removeSession(session: SessionView): void {
+  emit('delete-session', session.sessionCode)
+  menuVisible.value = false
+}
+
+function handleCurrentChange(page: number): void {
+  currentPage.value = page
+  hideContextMenu()
+}
+
+function handleWindowClick(): void {
+  hideContextMenu()
+}
+
+window.addEventListener('click', handleWindowClick)
+
+onBeforeUnmount(() => {
+  window.removeEventListener('click', handleWindowClick)
+})
 </script>
 
 <style scoped>
@@ -395,7 +374,6 @@ window.addEventListener('click', hideContextMenu);
   justify-content: center;
 }
 
-/* 右键菜单样式 */
 .context-menu {
   position: fixed;
   background-color: #fff;
@@ -442,7 +420,6 @@ window.addEventListener('click', hideContextMenu);
   gap: 10px;
 }
 
-/* 滚动条样式 */
 .session-list::-webkit-scrollbar {
   width: 6px;
 }

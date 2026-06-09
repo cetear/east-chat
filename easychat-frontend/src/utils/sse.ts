@@ -1,4 +1,5 @@
 export interface SSECallbacks {
+  onSession?: (sessionId: string) => void
   onMessage?: (token: string) => void
   onThought?: (data: { content: string }) => void
   onAction?: (data: { tool: string; input: Record<string, unknown> }) => void
@@ -49,7 +50,26 @@ export function handleStreamChat(response: Response, callbacks: SSECallbacks): v
 
   function dispatchEvent(event: string, data: string): void {
     switch (event) {
+      case 'session':
+        callbacks.onSession?.(data.trim())
+        break
       case 'message':
+        if (data.startsWith('__session_id__:')) {
+          callbacks.onSession?.(data.replace('__session_id__:', '').trim())
+          return
+        }
+        try {
+          const parsed = JSON.parse(data) as { sessionId?: string; content?: string }
+          if (parsed.sessionId) {
+            callbacks.onSession?.(parsed.sessionId)
+            if (parsed.content) {
+              callbacks.onMessage?.(parsed.content)
+            }
+            return
+          }
+        } catch {
+          // ignore JSON parse errors for plain text chunks
+        }
         callbacks.onMessage?.(data)
         break
       case 'thought':

@@ -24,16 +24,10 @@ import { marked } from 'marked'
 import ThoughtBlock from './ThoughtBlock.vue'
 import ToolCard from './ToolCard.vue'
 import ObservationBlock from './ObservationBlock.vue'
+import type { ChatMessage as PlainChatMessage, StreamEventMessage } from '@/types/message'
 
 const props = defineProps<{
-  message: {
-    role: string
-    content: string
-    type?: string
-    toolName?: string
-    toolInput?: Record<string, unknown>
-    toolOutput?: string
-  }
+  message: PlainChatMessage | StreamEventMessage
 }>()
 
 const renderedContent = computed(() => {
