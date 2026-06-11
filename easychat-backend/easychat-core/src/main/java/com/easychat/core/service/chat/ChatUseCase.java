@@ -82,14 +82,14 @@ public class ChatUseCase {
         if (command.getSessionCode() != null) {
             return sessionUseCase.getSession(command.getSessionCode());
         }
-        return sessionUseCase.createSession(command.getModelCode());
+        return sessionUseCase.createSession();
     }
 
     private ChatExecutionContext buildContext(ChatCommand command, ChatSession session) {
         ChatExecutionContext context = new ChatExecutionContext();
         context.setSessionId(session.getId());
         context.setSessionCode(session.getSessionCode());
-        context.setModelCode(session.getModelCode());
+        context.setModelCode(command.getModelCode());
         applyModelDefaults(context);
         context.setToolsEnabled(command.isToolsEnabled());
         context.setRagEnabled(command.isRagEnabled());

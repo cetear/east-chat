@@ -11,8 +11,10 @@ import com.easychat.core.service.chat.StreamChatUseCase;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+import reactor.core.Disposable;
 
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 
 @Service
 public class AgentFacade {
@@ -26,36 +28,48 @@ public class AgentFacade {
     @Autowired
     private SessionUseCase sessionUseCase;
 
-    public SseEmitter streamChat(Long sessionId, String userMessage, boolean toolsEnabled, boolean ragEnabled) {
+    public SseEmitter streamChat(Long sessionId, String modelCode, String userMessage, boolean toolsEnabled, boolean ragEnabled) {
         ChatSession session = sessionUseCase.getSessionById(sessionId);
 
         ChatCommand command = new ChatCommand();
         command.setSessionCode(session.getSessionCode());
+        command.setModelCode(modelCode);
         command.setUserMessage(userMessage);
         command.setToolsEnabled(toolsEnabled);
         command.setRagEnabled(ragEnabled);
 
         SseEmitter emitter = SSEUtil.createEmitter();
-        streamChatUseCase.streamChat(command).subscribe(
-                event -> sendEvent(emitter, event),
+        AtomicReference<Disposable> subscriptionRef = new AtomicReference<>();
+        emitter.onCompletion(() -> dispose(subscriptionRef));
+        emitter.onTimeout(() -> dispose(subscriptionRef));
+        emitter.onError(error -> dispose(subscriptionRef));
+
+        Disposable subscription = streamChatUseCase.streamChat(command).subscribe(
+                event -> {
+                    if (!sendEvent(emitter, event)) {
+                        dispose(subscriptionRef);
+                    }
+                },
                 error -> SSEUtil.sendError(emitter, error.getMessage()),
                 () -> SSEUtil.sendFinish(emitter, "stop")
         );
+        subscriptionRef.set(subscription);
         return emitter;
     }
 
-    public String chat(Long sessionId, String userMessage) {
+    public String chat(Long sessionId, String modelCode, String userMessage) {
         ChatSession session = sessionUseCase.getSessionById(sessionId);
 
         ChatCommand command = new ChatCommand();
         command.setSessionCode(session.getSessionCode());
+        command.setModelCode(modelCode);
         command.setUserMessage(userMessage);
         ChatResult result = chatUseCase.chat(command);
         return result.getContent();
     }
 
-    public ChatSession createSession(String modelCode) {
-        return sessionUseCase.createSession(modelCode);
+    public ChatSession createSession() {
+        return sessionUseCase.createSession();
     }
 
     public ChatSession getSession(String sessionCode) {
@@ -70,18 +84,29 @@ public class AgentFacade {
         sessionUseCase.updateSession(session);
     }
 
+    public ChatSession updateSession(String sessionCode, ChatSession changes) {
+        return sessionUseCase.updateSession(sessionCode, changes);
+    }
+
     public void deleteSession(String sessionCode) {
         sessionUseCase.deleteSession(sessionCode);
     }
 
-    private void sendEvent(SseEmitter emitter, AgentEvent event) {
-        switch (event.getType()) {
+    private boolean sendEvent(SseEmitter emitter, AgentEvent event) {
+        return switch (event.getType()) {
             case THOUGHT -> SSEUtil.sendThought(emitter, event.toJsonData());
             case ACTION -> SSEUtil.sendAction(emitter, event.toJsonData());
             case OBSERVATION -> SSEUtil.sendObservation(emitter, event.toJsonData());
             case MESSAGE -> SSEUtil.sendMessage(emitter, event.getContent());
             case ERROR -> SSEUtil.sendError(emitter, event.getContent());
-            default -> { }
+            default -> true;
+        };
+    }
+
+    private void dispose(AtomicReference<Disposable> subscriptionRef) {
+        Disposable subscription = subscriptionRef.get();
+        if (subscription != null && !subscription.isDisposed()) {
+            subscription.dispose();
         }
     }
 }

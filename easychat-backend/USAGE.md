@@ -274,12 +274,10 @@ POST /api/session
 Content-Type: application/json
 ```
 
-请求示例：
+创建会话不绑定模型，请求体可以为空。模型在聊天请求中通过 `model` 字段实时传入，方便同一会话内切换模型。
 
 ```json
-{
-  "modelType": "deepseek-chat"
-}
+{}
 ```
 
 查询会话列表：
@@ -538,4 +536,3 @@ mvn -pl easychat-app -am compile -DskipTests
 ```powershell
 mvn -pl easychat-test -am test-compile -DskipTests
 ```
-

@@ -2,6 +2,7 @@ package com.easychat.core.adapter.mysql;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.easychat.common.exception.BusinessException;
 import com.easychat.core.domain.chat.ChatMessage;
 import com.easychat.core.port.ChatMessageRepository;
 import com.easychat.infra.mysql.entity.ChatMessageDO;
@@ -26,6 +27,9 @@ public class ChatMessageMysqlRepository implements ChatMessageRepository {
 
     @Override
     public void update(ChatMessage message) {
+        if (message.getId() == null) {
+            throw new BusinessException("Message id is required for update");
+        }
         chatMessageMapper.updateById(toEntity(message));
     }
 

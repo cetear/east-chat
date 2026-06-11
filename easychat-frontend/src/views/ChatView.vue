@@ -50,6 +50,7 @@
             :options="configStore.modelOptions"
             :loading="configStore.modelOptionsLoading"
             :disabled="chatStore.isStreaming || !chatStore.activeSessionId"
+            @visible-change="handleModelSelectorVisibleChange"
             @update:model-value="handleModelChange"
           />
 
@@ -120,7 +121,7 @@ const currentModelLabel = computed(() => {
     return '请先新建或选择会话'
   }
 
-  const modelCode = chatStore.activeSession?.modelCode || configStore.currentModel
+  const modelCode = configStore.currentModel
   return `当前模型: ${configStore.getModelLabel(modelCode)}`
 })
 
@@ -138,8 +139,22 @@ function createRequestMessages(content: string): ChatMessageType[] {
 
 async function refreshActiveSession(sessionId: string): Promise<void> {
   await chatStore.switchSession(sessionId)
-  configStore.setModel(chatStore.activeSession?.modelCode || configStore.currentModel)
   scrollToBottom()
+}
+
+function resolveSelectedModel(): string | null {
+  const modelCode = configStore.currentModel || configStore.modelOptions[0]?.code
+  if (!modelCode) {
+    ElMessage.warning('未获取到可用模型，请检查 /model/list 接口')
+    return null
+  }
+
+  if (modelCode !== configStore.currentModel) {
+    configStore.setModel(modelCode)
+  }
+
+  const selectedModel = configStore.modelOptions.find(item => item.code === modelCode)
+  return selectedModel?.name || modelCode
 }
 
 async function persistSessionTitle(session: SessionView, content: string): Promise<void> {
@@ -159,6 +174,11 @@ async function handleStreamSend(content: string): Promise<void> {
     return
   }
 
+  const model = resolveSelectedModel()
+  if (!model) {
+    return
+  }
+
   chatStore.isStreaming = true
   chatStore.streamContent = ''
   chatStore.streamingEvents = []
@@ -173,7 +193,7 @@ async function handleStreamSend(content: string): Promise<void> {
   try {
     const response = await streamChat({
       sessionId,
-      model: configStore.currentModel,
+      model,
       messages: requestMessages,
       toolsEnabled: configStore.toolsEnabled,
       ragEnabled: configStore.ragEnabled,
@@ -254,6 +274,11 @@ async function handleNormalSend(content: string): Promise<void> {
     return
   }
 
+  const model = resolveSelectedModel()
+  if (!model) {
+    return
+  }
+
   chatStore.isStreaming = true
   const requestMessages = createRequestMessages(content)
 
@@ -263,7 +288,7 @@ async function handleNormalSend(content: string): Promise<void> {
   try {
     const response = await chat({
       sessionId,
-      model: configStore.currentModel,
+      model,
       messages: requestMessages,
       toolsEnabled: configStore.toolsEnabled,
       ragEnabled: configStore.ragEnabled,
@@ -307,15 +332,8 @@ function handleStopStreaming(): void {
 async function handleNewChat(): Promise<void> {
   if (chatStore.isStreaming) return
 
-  const modelCode = configStore.currentModel || configStore.modelOptions[0]?.code
-  if (!modelCode) {
-    ElMessage.warning('未获取到可用模型，请检查 /model/list 接口')
-    return
-  }
-
   try {
-    const session = await chatStore.createSession(modelCode)
-    configStore.setModel(session.modelCode || modelCode)
+    await chatStore.createSession()
     scrollToBottom()
   } catch (error) {
     ElMessage.error((error as Error).message || '新建会话失败，请重试')
@@ -353,44 +371,27 @@ async function handleUpdateSession(session: SessionView): Promise<void> {
 }
 
 async function handleModelChange(model: string): Promise<void> {
-  const activeSession = chatStore.activeSession
-  if (!activeSession) {
-    ElMessage.warning('请先选择会话')
-    return
-  }
-
-  const previousModel = configStore.currentModel
   configStore.setModel(model)
+}
+
+async function handleModelSelectorVisibleChange(visible: boolean): Promise<void> {
+  if (!visible) return
 
   try {
-    await chatStore.updateSession({
-      ...activeSession,
-      modelCode: model,
-    })
-    await refreshActiveSession(activeSession.sessionCode)
+    await configStore.loadModelOptions()
   } catch (error) {
-    configStore.setModel(previousModel)
-    ElMessage.error((error as Error).message || '更新模型失败，请重试')
+    ElMessage.error((error as Error).message || '加载模型列表失败')
   }
 }
 
 onMounted(async () => {
-  const [modelResult, sessionResult] = await Promise.allSettled([
-    configStore.loadModelOptions(),
+  const [sessionResult] = await Promise.allSettled([
     chatStore.loadSessions(),
   ])
-
-  if (modelResult.status === 'rejected') {
-    ElMessage.error((modelResult.reason as Error).message || '加载模型列表失败')
-  }
 
   if (sessionResult.status === 'rejected') {
     ElMessage.error((sessionResult.reason as Error).message || '加载会话列表失败')
     return
-  }
-
-  if (chatStore.activeSession?.modelCode) {
-    configStore.setModel(chatStore.activeSession.modelCode)
   }
 })
 

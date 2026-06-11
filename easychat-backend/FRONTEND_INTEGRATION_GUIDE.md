@@ -89,7 +89,7 @@ POST http://localhost:8080/api/chat
 | 字段 | 类型 | 必填 | 说明 |
 | --- | --- | --- | --- |
 | `sessionId` | string | 否 | 已有会话的 `sessionCode`。为空时后端会创建新会话 |
-| `model` | string | 新会话时建议必填 | 新建会话使用的模型编码 |
+| `model` | string | 是 | 本次聊天使用的模型编码。模型不绑定会话，每次发送消息都需要传入 |
 | `messages` | array | 是 | 消息数组，后端当前取最后一条消息作为用户输入 |
 | `messages[].role` | string | 是 | 建议值：`user`、`assistant`、`system` |
 | `messages[].content` | string | 是 | 消息内容 |
@@ -98,7 +98,7 @@ POST http://localhost:8080/api/chat
 
 注意：
 
-- 当前后端没有对 `messages` 做空数组保护。前端必须保证 `messages` 至少有一条消息。
+- 后端会校验 `model`、`messages` 和最后一条消息的 `content`，缺失时返回 400。
 - 当前后端只读取 `messages` 最后一条的 `content`，不会完整消费前端传入的历史消息。历史上下文由后端根据会话 ID 从数据库读取。
 
 ### 3.2 MessageDTO
@@ -119,7 +119,6 @@ POST http://localhost:8080/api/chat
   "id": 1,
   "sessionCode": "d9a8c3f2-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
   "title": "New Chat",
-  "modelCode": "deepseek-chat",
   "systemPrompt": null,
   "maxRounds": 10,
   "status": 1,
@@ -135,7 +134,6 @@ POST http://localhost:8080/api/chat
 | `id` | number | 数据库内部 ID |
 | `sessionCode` | string | 业务会话 ID，前端后续请求使用这个值 |
 | `title` | string | 会话标题 |
-| `modelCode` | string | 会话绑定模型 |
 | `systemPrompt` | string/null | 系统提示词 |
 | `maxRounds` | number | 最大上下文轮数 |
 | `status` | number | 状态，通常 `1` 表示正常 |
@@ -357,14 +355,12 @@ POST /api/session
 Content-Type: application/json
 ```
 
-当前后端字段名是 `modelType`，实际会作为 `modelCode` 创建会话。
+创建会话不需要传模型。模型在 `/api/chat` 或 `/api/chat/stream` 请求中实时传入，方便同一会话内切换模型。
 
 请求示例：
 
 ```json
-{
-  "modelType": "deepseek-chat"
-}
+{}
 ```
 
 响应：
@@ -374,7 +370,6 @@ Content-Type: application/json
   "id": 1,
   "sessionCode": "d9a8c3f2-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
   "title": "New Chat",
-  "modelCode": "deepseek-chat",
   "systemPrompt": null,
   "maxRounds": 10,
   "status": 1,
@@ -385,8 +380,8 @@ Content-Type: application/json
 
 前端建议：
 
-- 前端内部统一使用 `modelCode` 命名，但请求当前接口时映射为 `modelType`。
 - 创建成功后，将 `sessionCode` 作为当前会话 ID。
+- 模型选择器状态由前端维护，发送每条消息时把当前选中的模型作为 `model` 传给聊天接口。
 
 ### 5.2 查询会话列表
 
@@ -402,7 +397,6 @@ GET /api/sessions
     "id": 1,
     "sessionCode": "d9a8c3f2-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
     "title": "New Chat",
-    "modelCode": "deepseek-chat",
     "systemPrompt": null,
     "maxRounds": 10,
     "status": 1,
@@ -443,7 +437,6 @@ Content-Type: application/json
 ```json
 {
   "title": "新的会话标题",
-  "modelCode": "deepseek-chat",
   "systemPrompt": "你是一个简洁的助手",
   "maxRounds": 10,
   "status": 1
@@ -626,10 +619,10 @@ DELETE /api/providers/{providerCode}
 ## 11. 前端对接注意事项
 
 1. `sessionId` 在接口中实际指 `sessionCode`，不是数据库数字 ID。
-2. `/api/session` 创建会话请求字段当前是 `modelType`，但语义是模型编码。
+2. `/api/session` 创建会话不传模型；模型在每次 `/api/chat` 或 `/api/chat/stream` 请求中通过 `model` 字段传入。
 3. `/api/chat` 如果不传 `sessionId`，后端会自动创建会话。
 4. `/api/chat/stream` 是 POST SSE，不能直接用原生 `EventSource`。
-5. 前端必须保证 `messages` 非空，否则后端会数组越界。
+5. 前端必须保证 `model`、`messages` 和最后一条消息 `content` 非空，否则后端返回 400。
 6. 当前后端没有登录鉴权，生产环境前需要补充认证机制。
 7. 当前测试和配置仍依赖真实数据库，前端联调前应确认数据库 schema 已升级到最新。
 8. 如果后端报 `Unknown column 'model_name'`，说明数据库 `model` 表还未执行新版 schema。
@@ -667,4 +660,3 @@ DELETE /api/providers/{providerCode}
 ```text
 POST http://localhost:8080/api/chat
 ```
-

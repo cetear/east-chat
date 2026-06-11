@@ -1,6 +1,7 @@
 package com.easychat.core.adapter.mysql;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.easychat.common.exception.BusinessException;
 import com.easychat.core.domain.model.ModelDefinition;
 import com.easychat.core.domain.model.ModelRoute;
 import com.easychat.core.domain.model.ProviderAccount;
@@ -51,6 +52,9 @@ public class ModelCatalogMysqlRepository implements ModelCatalogRepository {
 
     @Override
     public void updateProvider(ProviderAccount provider) {
+        if (provider.getId() == null) {
+            throw new BusinessException("Provider id is required for update");
+        }
         providerMapper.updateById(toEntity(provider));
     }
 
@@ -82,6 +86,9 @@ public class ModelCatalogMysqlRepository implements ModelCatalogRepository {
 
     @Override
     public void updateModel(ModelDefinition model) {
+        if (model.getId() == null) {
+            throw new BusinessException("Model id is required for update");
+        }
         modelMapper.updateById(toEntity(model));
     }
 

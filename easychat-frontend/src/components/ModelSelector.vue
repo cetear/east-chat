@@ -6,6 +6,7 @@
       :loading="loading"
       placeholder="选择模型"
       class="model-select"
+      @visible-change="(visible: boolean) => emit('visibleChange', visible)"
       @update:model-value="(value: string) => emit('update:modelValue', value)"
     >
       <el-option
@@ -30,6 +31,7 @@ defineProps<{
 
 const emit = defineEmits<{
   'update:modelValue': [value: string]
+  visibleChange: [visible: boolean]
 }>()
 </script>
 

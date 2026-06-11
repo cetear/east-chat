@@ -20,12 +20,11 @@ public class SessionUseCase {
     @Autowired
     private ChatMessageRepository chatMessageRepository;
 
-    public ChatSession createSession(String modelCode) {
+    public ChatSession createSession() {
         LocalDateTime now = LocalDateTime.now();
         ChatSession session = new ChatSession();
         session.setSessionCode(UUID.randomUUID().toString());
         session.setTitle("New Chat");
-        session.setModelCode(modelCode != null ? modelCode : "");
         session.setMaxRounds(10);
         session.setStatus(1);
         session.setCreatedAt(now);
@@ -56,6 +55,24 @@ public class SessionUseCase {
     public void updateSession(ChatSession session) {
         session.setUpdatedAt(LocalDateTime.now());
         chatSessionRepository.update(session);
+    }
+
+    public ChatSession updateSession(String sessionCode, ChatSession changes) {
+        ChatSession session = getSession(sessionCode);
+        if (changes.getTitle() != null) {
+            session.setTitle(changes.getTitle());
+        }
+        if (changes.getSystemPrompt() != null) {
+            session.setSystemPrompt(changes.getSystemPrompt());
+        }
+        if (changes.getMaxRounds() != null) {
+            session.setMaxRounds(changes.getMaxRounds());
+        }
+        if (changes.getStatus() != null) {
+            session.setStatus(changes.getStatus());
+        }
+        updateSession(session);
+        return session;
     }
 
     public void deleteSession(String sessionCode) {

@@ -17,10 +17,9 @@ public class AgentFacadeTest {
 
     @Test
     public void testCreateSession() {
-        ChatSession session = agentFacade.createSession("gpt-4");
+        ChatSession session = agentFacade.createSession();
         assertNotNull(session);
         assertNotNull(session.getSessionCode());
-        assertEquals("gpt-4", session.getModelCode());
     }
 
     @Test

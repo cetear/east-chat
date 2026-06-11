@@ -10,7 +10,6 @@ public class SessionView {
     private Long id;
     private String sessionCode;
     private String title;
-    private String modelCode;
     private String systemPrompt;
     private Integer maxRounds;
     private Integer status;
@@ -22,7 +21,6 @@ public class SessionView {
         view.setId(session.getId());
         view.setSessionCode(session.getSessionCode());
         view.setTitle(session.getTitle());
-        view.setModelCode(session.getModelCode());
         view.setSystemPrompt(session.getSystemPrompt());
         view.setMaxRounds(session.getMaxRounds());
         view.setStatus(session.getStatus());

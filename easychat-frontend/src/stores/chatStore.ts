@@ -19,6 +19,7 @@ export const useChatStore = defineStore('chat', () => {
   const streamContent = ref('')
   const streamingEvents = ref<StreamEventMessage[]>([])
   const streamingSessionId = ref<string | null>(null)
+  let latestSwitchRequestId = 0
 
   const activeSession = computed<ChatSession | null>(() => {
     const session = sessions.value.find(item => item.sessionCode === activeSessionId.value)
@@ -54,8 +55,8 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
 
-  async function createSession(modelCode: string): Promise<SessionView> {
-    const session = await chatApi.createSession(modelCode)
+  async function createSession(): Promise<SessionView> {
+    const session = await chatApi.createSession()
     sessions.value = sortSessions([session, ...sessions.value.filter(item => item.sessionCode !== session.sessionCode)])
     setSessionMessages(session.sessionCode, [])
     activeSessionId.value = session.sessionCode
@@ -65,17 +66,31 @@ export const useChatStore = defineStore('chat', () => {
   }
 
   async function switchSession(sessionId: string): Promise<void> {
-    const session = await chatApi.getSession(sessionId)
-    const existingMessages = messagesBySession.value[sessionId] ?? []
-    const nextMessages = Array.isArray(session.messages) ? session.messages : existingMessages
-    sessions.value = sortSessions([
-      session,
-      ...sessions.value.filter(item => item.sessionCode !== sessionId),
-    ])
-    setSessionMessages(sessionId, nextMessages)
+    const requestId = ++latestSwitchRequestId
+    const previousSessionId = activeSessionId.value
     activeSessionId.value = sessionId
-    pendingSessionTitle.value = ''
-    draftMessages.value = []
+
+    try {
+      const session = await chatApi.getSession(sessionId)
+      if (requestId !== latestSwitchRequestId) return
+
+      const existingMessages = messagesBySession.value[sessionId] ?? []
+      const nextMessages = Array.isArray(session.messages) ? session.messages : existingMessages
+      const hasSession = sessions.value.some(item => item.sessionCode === sessionId)
+
+      sessions.value = hasSession
+        ? sessions.value.map(item => (item.sessionCode === sessionId ? session : item))
+        : sortSessions([session, ...sessions.value])
+
+      setSessionMessages(sessionId, nextMessages)
+      pendingSessionTitle.value = ''
+      draftMessages.value = []
+    } catch (error) {
+      if (requestId === latestSwitchRequestId) {
+        activeSessionId.value = previousSessionId
+      }
+      throw error
+    }
   }
 
   async function deleteSession(sessionId: string): Promise<void> {

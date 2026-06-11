@@ -20,9 +20,6 @@ public class ChatSessionDO {
     @TableField("title")
     private String title;
 
-    @TableField("model_code")
-    private String modelCode;
-
     @TableField("system_prompt")
     private String systemPrompt;
 

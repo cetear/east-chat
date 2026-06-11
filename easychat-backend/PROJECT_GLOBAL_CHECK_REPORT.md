@@ -161,8 +161,8 @@ easychat:
 
 问题示例：
 
-- `request.getMessages().get(request.getMessages().size() - 1)` 未判断 `messages` 是否为空。
-- `createSession` 从 `Map<String, String>` 获取 `modelType`，缺少必填校验。
+- `chat`、`streamChat` 已对 `model`、`messages` 和最后一条消息 `content` 做基础校验，后续仍建议统一为 Bean Validation。
+- `createSession` 已调整为不接收模型参数；模型改为每次聊天实时传入。
 - `setMaxRounds` 未校验 `maxRounds` 是否为空或小于 1。
 - 模型、渠道管理接口没有 `@Valid` 和 DTO 字段约束。
 
@@ -297,7 +297,7 @@ target/
 
 建议补充：
 
-1. `chat_session.model_code` 可考虑增加到 `model.model_code` 的外键，或者明确不加外键以支持历史模型编码。
+1. `chat_session` 已不保存固定模型；实际调用模型记录在 `chat_message.model_code` 和请求日志中。
 2. `model_provider.model_code` 和 `provider_code` 可考虑增加外键，或者在服务层保证一致性。
 3. `chat_session_memory.session_id` 当前只有索引，没有外键；建议按数据生命周期决定是否加 `ON DELETE CASCADE`。
 4. `provider.api_key` 建议加密存储，不建议明文入库。
@@ -375,4 +375,3 @@ rg -n "support_(stream|tools|vision|json_output)" .
 1. 配置脱敏和密钥轮换。
 2. 建立 `application-test.yml`。
 3. 让 `mvn test` 不依赖真实数据库。
-

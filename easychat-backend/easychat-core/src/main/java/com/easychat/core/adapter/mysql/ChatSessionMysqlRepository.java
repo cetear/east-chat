@@ -1,6 +1,7 @@
 package com.easychat.core.adapter.mysql;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.easychat.common.exception.BusinessException;
 import com.easychat.core.domain.chat.ChatSession;
 import com.easychat.core.port.ChatSessionRepository;
 import com.easychat.infra.mysql.entity.ChatSessionDO;
@@ -41,6 +42,9 @@ public class ChatSessionMysqlRepository implements ChatSessionRepository {
 
     @Override
     public void update(ChatSession session) {
+        if (session.getId() == null) {
+            throw new BusinessException("Session id is required for update");
+        }
         chatSessionMapper.updateById(toEntity(session));
     }
 
@@ -57,7 +61,6 @@ public class ChatSessionMysqlRepository implements ChatSessionRepository {
         session.setId(entity.getId());
         session.setSessionCode(entity.getSessionCode());
         session.setTitle(entity.getTitle());
-        session.setModelCode(entity.getModelCode());
         session.setSystemPrompt(entity.getSystemPrompt());
         session.setMaxRounds(entity.getMaxRounds());
         session.setStatus(entity.getStatus());
@@ -71,7 +74,6 @@ public class ChatSessionMysqlRepository implements ChatSessionRepository {
         entity.setId(session.getId());
         entity.setSessionCode(session.getSessionCode());
         entity.setTitle(session.getTitle());
-        entity.setModelCode(session.getModelCode());
         entity.setSystemPrompt(session.getSystemPrompt());
         entity.setMaxRounds(session.getMaxRounds());
         entity.setStatus(session.getStatus());

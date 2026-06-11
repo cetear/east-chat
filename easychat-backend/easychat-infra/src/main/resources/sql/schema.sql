@@ -14,13 +14,11 @@ CREATE TABLE chat_session (
     id              BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID（数据库内部唯一标识）',
     session_code    VARCHAR(64) NOT NULL UNIQUE COMMENT '业务会话ID（对外暴露，用于API/前端）',
     title           VARCHAR(255) COMMENT '会话标题（可由用户输入或模型自动生成）',
-    model_code      VARCHAR(64) NOT NULL COMMENT '默认使用的模型标识（如 gpt-4o / deepseek-chat）',
     system_prompt   TEXT COMMENT '系统提示词（用于控制模型行为，如角色设定）',
     max_rounds      INT DEFAULT 10 COMMENT '最大对话轮数（用于上下文裁剪，防止token过大）',
     status          TINYINT DEFAULT 1 COMMENT '会话状态：1=正常 0=关闭/归档',
     created_at      DATETIME(3) NOT NULL COMMENT '创建时间（毫秒级，便于排序/统计）',
-    updated_at      DATETIME(3) NOT NULL COMMENT '更新时间（最后一次交互时间）',
-    INDEX idx_model (model_code) COMMENT '模型索引（用于按模型统计/查询）'
+    updated_at      DATETIME(3) NOT NULL COMMENT '更新时间（最后一次交互时间）'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='聊天会话表';
 
 CREATE TABLE chat_session_config (

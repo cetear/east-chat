@@ -1,11 +1,11 @@
 package com.easychat.core.router;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.easychat.core.context.ChatExecutionContext;
 import com.easychat.core.port.ChatModelClient;
 import com.easychat.llm.client.LLMCallOptions;
 import com.easychat.llm.client.LLMClient;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Flux;
 
@@ -13,44 +13,20 @@ import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * 多渠道路由器，实现 {@link LLMClient} 接口，无缝替换原单渠道客户端。
- *
- * <p>路由策略：
- * <ol>
- *   <li>按优先级遍历可用渠道（未熔断）</li>
- *   <li>流式场景：若渠道中途中断，将已生成内容拼入续写 prompt，切换下一渠道继续输出</li>
- *   <li>所有渠道均失败时抛出异常</li>
- * </ol>
- *
- * <p>调用方通过 {@link #MODEL_CODE_HOLDER} 注入当前请求的模型标识。
- * 若未设置，则退化为只调用 {@code fallbackClient}（原 LangChain4j 默认实现）。
- */
 @Slf4j
 public class ModelRouter implements LLMClient, ChatModelClient {
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
-    /** 调用方在使用前通过此 ThreadLocal 指定模型，调用结束后需 clear */
     public static final ThreadLocal<String> MODEL_CODE_HOLDER = new ThreadLocal<>();
 
-
     private final ProviderRegistry registry;
-
-    /**
-     * 降级客户端：当 DB 中无对应模型配置时使用原始 LangChain4j 客户端。
-     * 使用 @Qualifier 或条件注入，此处允许为 null。
-     */
     private final LLMClient fallbackClient;
 
     public ModelRouter(ProviderRegistry registry, LLMClient fallbackClient) {
         this.registry = registry;
         this.fallbackClient = fallbackClient;
     }
-
-    // ------------------------------------------------------------------ //
-    //  LLMClient 接口实现
-    // ------------------------------------------------------------------ //
 
     @Override
     public String chat(String prompt) {
@@ -70,8 +46,9 @@ public class ModelRouter implements LLMClient, ChatModelClient {
 
         Exception lastError = null;
         for (ProviderWrapper wrapper : providers) {
+            String providerCode = wrapper.getProvider().getProviderCode();
             if (!wrapper.isAvailable()) {
-                log.debug("[{}] skipped (circuit open)", wrapper.getProvider().getProviderCode());
+                log.debug("[{}] skipped (circuit open)", providerCode);
                 continue;
             }
             try {
@@ -79,7 +56,7 @@ public class ModelRouter implements LLMClient, ChatModelClient {
                 wrapper.recordSuccess();
                 return result;
             } catch (Exception e) {
-                log.warn("[{}] chat failed: {}", wrapper.getProvider().getProviderCode(), e.getMessage());
+                log.warn("[{}] chat failed: {}", providerCode, e.getMessage());
                 wrapper.recordFailure();
                 lastError = e;
             }
@@ -108,7 +85,16 @@ public class ModelRouter implements LLMClient, ChatModelClient {
             return fallbackClient.streamChat(prompt, options);
         }
 
-        return Flux.create(sink -> attemptStream(providers, 0, new StringBuilder(), prompt, options, sink));
+        return Flux.create(sink -> attemptStream(
+                providers,
+                0,
+                new StringBuilder(),
+                prompt,
+                options,
+                new ArrayList<>(),
+                modelCode,
+                sink
+        ));
     }
 
     @Override
@@ -116,26 +102,31 @@ public class ModelRouter implements LLMClient, ChatModelClient {
         return streamChat(prompt, context != null ? context.getModelCode() : null, toCallOptions(context));
     }
 
-    // ------------------------------------------------------------------ //
-    //  流式分发与续写
-    // ------------------------------------------------------------------ //
-
     private void attemptStream(List<ProviderWrapper> providers,
                                int index,
                                StringBuilder partial,
                                String originalPrompt,
                                LLMCallOptions options,
+                               List<String> failures,
+                               String modelCode,
                                reactor.core.publisher.FluxSink<String> sink) {
+        if (sink.isCancelled()) {
+            return;
+        }
         if (index >= providers.size()) {
-            sink.error(new RuntimeException("All providers exhausted during streaming"));
+            String detail = failures.isEmpty() ? "no available provider" : String.join("; ", failures);
+            sink.error(new RuntimeException("All providers exhausted during streaming for model: "
+                    + modelCode + ". " + detail));
             return;
         }
 
         ProviderWrapper wrapper = providers.get(index);
+        String providerCode = wrapper.getProvider().getProviderCode();
 
         if (!wrapper.isAvailable()) {
-            log.debug("[{}] skipped (circuit open)", wrapper.getProvider().getProviderCode());
-            attemptStream(providers, index + 1, partial, originalPrompt, options, sink);
+            log.debug("[{}] skipped (circuit open)", providerCode);
+            failures.add(providerCode + " skipped: circuit open");
+            attemptStream(providers, index + 1, partial, originalPrompt, options, failures, modelCode, sink);
             return;
         }
 
@@ -146,33 +137,37 @@ public class ModelRouter implements LLMClient, ChatModelClient {
         wrapper.getProvider().streamChat(effectivePrompt, options)
                 .subscribe(
                         token -> {
-                            partial.append(token);
-                            sink.next(token);
+                            if (!sink.isCancelled()) {
+                                partial.append(token);
+                                sink.next(token);
+                            }
                         },
                         error -> {
+                            if (sink.isCancelled()) {
+                                return;
+                            }
                             log.warn("[{}] stream interrupted after {} chars: {}",
-                                    wrapper.getProvider().getProviderCode(), partial.length(), error.getMessage());
+                                    providerCode, partial.length(), error.getMessage());
                             wrapper.recordFailure();
-                            // 无缝切换到下一渠道
-                            attemptStream(providers, index + 1, partial, originalPrompt, options, sink);
+                            failures.add(providerCode + " failed: " + error.getMessage());
+                            attemptStream(providers, index + 1, partial, originalPrompt, options,
+                                    failures, modelCode, sink);
                         },
                         () -> {
-                            wrapper.recordSuccess();
-                            sink.complete();
+                            if (!sink.isCancelled()) {
+                                wrapper.recordSuccess();
+                                sink.complete();
+                            }
                         }
                 );
     }
 
-    /**
-     * 构建续写 Prompt：告知模型已生成的内容，要求从中断处继续。
-     * 取 partial 末尾 200 字符作为上下文窗口，避免 tokenizer 差异导致的溢出。
-     */
     private String buildContinuationPrompt(String originalPrompt, String partial) {
         String tail = partial.length() > 200 ? partial.substring(partial.length() - 200) : partial;
         return originalPrompt + "\n\n"
-                + "【已生成内容（请勿重复，直接从此处继续）】\n"
+                + "[Already generated content. Do not repeat it; continue from this point.]\n"
                 + "..." + tail
-                + "\n\n请保持语义和风格一致，继续生成剩余内容：\nAssistant: ";
+                + "\n\nContinue the remaining answer with consistent meaning and style:\nAssistant: ";
     }
 
     private LLMCallOptions toCallOptions(ChatExecutionContext context) {
