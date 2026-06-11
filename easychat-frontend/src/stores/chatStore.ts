@@ -31,7 +31,7 @@ export const useChatStore = defineStore('chat', () => {
   })
 
   const currentMessages = computed<ChatMessage[]>(() => {
-    if (!activeSessionId.value) return draftMessages.value
+    if (!activeSessionId.value) return []
     return messagesBySession.value[activeSessionId.value] ?? []
   })
 
@@ -45,8 +45,9 @@ export const useChatStore = defineStore('chat', () => {
   async function loadSessions(): Promise<void> {
     const response = await chatApi.getSessions()
     sessions.value = sortSessions(response)
-    if (sessions.value.length > 0) {
-      await switchSession(sessions.value[0].sessionCode)
+    const firstSession = sessions.value[0]
+    if (firstSession) {
+      await switchSession(firstSession.sessionCode)
     } else {
       activeSessionId.value = null
       draftMessages.value = []
@@ -118,12 +119,6 @@ export const useChatStore = defineStore('chat', () => {
     draftMessages.value = []
     streamingSessionId.value = null
     clearStreamingState()
-  }
-
-  function setActiveSessionById(sessionId: string): void {
-    activeSessionId.value = sessionId
-    pendingSessionTitle.value = ''
-    draftMessages.value = []
   }
 
   function addUserMessage(content: string, sessionId?: string | null): void {

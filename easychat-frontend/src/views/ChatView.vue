@@ -3,6 +3,7 @@
     <ChatSidebar
       :sessions="chatStore.sessions"
       :active-session-id="chatStore.activeSessionId"
+      :model-options="configStore.modelOptions"
       @new-chat="handleNewChat"
       @session-click="handleSessionClick"
       @delete-session="handleDeleteSession"
@@ -46,7 +47,9 @@
 
           <ModelSelector
             :model-value="configStore.currentModel"
-            :disabled="chatStore.isStreaming"
+            :options="configStore.modelOptions"
+            :loading="configStore.modelOptionsLoading"
+            :disabled="chatStore.isStreaming || !chatStore.activeSessionId"
             @update:model-value="handleModelChange"
           />
 
@@ -76,13 +79,13 @@
         />
 
         <div v-if="!chatStore.currentMessages.length && !chatStore.isStreaming" class="empty-state">
-          <h3>开始一段新的对话</h3>
-          <p>输入第一条消息后，后端会自动创建会话。</p>
+          <h3>请先新建或选择一个会话</h3>
+          <p>会话创建完成后，再为当前会话选择模型并发送消息。</p>
         </div>
       </div>
 
       <ChatInput
-        :disabled="chatStore.isStreaming"
+        :disabled="chatStore.isStreaming || !chatStore.activeSessionId"
         @send="handleSendMessage"
       />
     </div>
@@ -109,11 +112,16 @@ const messagesContainer = ref<HTMLElement | null>(null)
 const activeAbortController = ref<AbortController | null>(null)
 
 const currentTitle = computed(() => {
-  return chatStore.activeSession?.title || chatStore.pendingSessionTitle || 'New Chat'
+  return chatStore.activeSession?.title || '未选择会话'
 })
 
 const currentModelLabel = computed(() => {
-  return `当前模型: ${configStore.currentModel}`
+  if (!chatStore.activeSessionId) {
+    return '请先新建或选择会话'
+  }
+
+  const modelCode = chatStore.activeSession?.modelCode || configStore.currentModel
+  return `当前模型: ${configStore.getModelLabel(modelCode)}`
 })
 
 function scrollToBottom(): void {
@@ -145,27 +153,26 @@ async function persistSessionTitle(session: SessionView, content: string): Promi
 }
 
 async function handleStreamSend(content: string): Promise<void> {
+  const sessionId = chatStore.activeSessionId
+  if (!sessionId) {
+    ElMessage.warning('请先新建会话')
+    return
+  }
+
   chatStore.isStreaming = true
   chatStore.streamContent = ''
   chatStore.streamingEvents = []
 
   const controller = new AbortController()
   activeAbortController.value = controller
-
-  const existingSessionId = chatStore.activeSessionId
   const requestMessages = createRequestMessages(content)
 
-  if (existingSessionId) {
-    chatStore.addUserMessage(content, existingSessionId)
-  } else {
-    chatStore.pendingSessionTitle = content.trim()
-  }
-
+  chatStore.addUserMessage(content, sessionId)
   scrollToBottom()
 
   try {
     const response = await streamChat({
-      sessionId: existingSessionId,
+      sessionId,
       model: configStore.currentModel,
       messages: requestMessages,
       toolsEnabled: configStore.toolsEnabled,
@@ -173,8 +180,8 @@ async function handleStreamSend(content: string): Promise<void> {
     }, controller.signal)
 
     handleStreamChat(response, {
-      onSession(sessionId) {
-        chatStore.bindSessionFromResponse(sessionId)
+      onSession(nextSessionId) {
+        chatStore.bindSessionFromResponse(nextSessionId)
       },
       onMessage(token) {
         chatStore.appendStreamContent(token)
@@ -219,20 +226,14 @@ async function handleStreamSend(content: string): Promise<void> {
         chatStore.clearStreamingState()
       },
       async onFinish() {
-        const sessionId = chatStore.activeSessionId
-        if (sessionId && !existingSessionId) {
-          chatStore.addUserMessage(content, sessionId)
-          await refreshActiveSession(sessionId)
-          const session = chatStore.activeSession
-          if (session) {
-            await persistSessionTitle(session, content)
-          }
+        chatStore.finalizeAssistantMessage()
+        await refreshActiveSession(sessionId)
+
+        const session = chatStore.activeSession
+        if (session) {
+          await persistSessionTitle(session, content)
         }
 
-        chatStore.finalizeAssistantMessage()
-        if (sessionId) {
-          await refreshActiveSession(sessionId)
-        }
         scrollToBottom()
       },
     })
@@ -247,39 +248,33 @@ async function handleStreamSend(content: string): Promise<void> {
 }
 
 async function handleNormalSend(content: string): Promise<void> {
-  chatStore.isStreaming = true
-  const existingSessionId = chatStore.activeSessionId
-  const requestMessages = createRequestMessages(content)
-
-  if (existingSessionId) {
-    chatStore.addUserMessage(content, existingSessionId)
-  } else {
-    chatStore.pendingSessionTitle = content.trim()
+  const sessionId = chatStore.activeSessionId
+  if (!sessionId) {
+    ElMessage.warning('请先新建会话')
+    return
   }
 
+  chatStore.isStreaming = true
+  const requestMessages = createRequestMessages(content)
+
+  chatStore.addUserMessage(content, sessionId)
   scrollToBottom()
 
   try {
     const response = await chat({
-      sessionId: existingSessionId,
+      sessionId,
       model: configStore.currentModel,
       messages: requestMessages,
       toolsEnabled: configStore.toolsEnabled,
       ragEnabled: configStore.ragEnabled,
     })
 
-    const sessionId = response.sessionId
-    if (!sessionId) {
+    if (!response.sessionId) {
       throw new Error('后端未返回 sessionId')
     }
 
-    if (!existingSessionId) {
-      chatStore.bindSessionFromResponse(sessionId)
-      chatStore.addUserMessage(content, sessionId)
-    }
-
-    chatStore.addAssistantMessage(response.content, sessionId)
-    await refreshActiveSession(sessionId)
+    chatStore.addAssistantMessage(response.content, response.sessionId)
+    await refreshActiveSession(response.sessionId)
 
     const session = chatStore.activeSession
     if (session) {
@@ -309,41 +304,91 @@ function handleStopStreaming(): void {
   chatStore.clearStreamingState()
 }
 
-function handleNewChat(): void {
-  chatStore.startDraftSession()
+async function handleNewChat(): Promise<void> {
+  if (chatStore.isStreaming) return
+
+  const modelCode = configStore.currentModel || configStore.modelOptions[0]?.code
+  if (!modelCode) {
+    ElMessage.warning('未获取到可用模型，请检查 /model/list 接口')
+    return
+  }
+
+  try {
+    const session = await chatStore.createSession(modelCode)
+    configStore.setModel(session.modelCode || modelCode)
+    scrollToBottom()
+  } catch (error) {
+    ElMessage.error((error as Error).message || '新建会话失败，请重试')
+  }
 }
 
 async function handleSessionClick(sessionId: string): Promise<void> {
-  await refreshActiveSession(sessionId)
+  try {
+    await refreshActiveSession(sessionId)
+  } catch (error) {
+    ElMessage.error((error as Error).message || '加载会话失败，请重试')
+  }
 }
 
 async function handleDeleteSession(sessionId: string): Promise<void> {
-  await chatStore.deleteSession(sessionId)
-  if (chatStore.activeSessionId) {
-    await refreshActiveSession(chatStore.activeSessionId)
+  try {
+    await chatStore.deleteSession(sessionId)
+    if (chatStore.activeSessionId) {
+      await refreshActiveSession(chatStore.activeSessionId)
+    }
+  } catch (error) {
+    ElMessage.error((error as Error).message || '删除会话失败，请重试')
   }
 }
 
 async function handleUpdateSession(session: SessionView): Promise<void> {
-  await chatStore.updateSession(session)
-  if (session.sessionCode === chatStore.activeSessionId) {
-    await refreshActiveSession(session.sessionCode)
+  try {
+    await chatStore.updateSession(session)
+    if (session.sessionCode === chatStore.activeSessionId) {
+      await refreshActiveSession(session.sessionCode)
+    }
+  } catch (error) {
+    ElMessage.error((error as Error).message || '更新会话失败，请重试')
   }
 }
 
 async function handleModelChange(model: string): Promise<void> {
-  configStore.setModel(model)
-  if (!chatStore.activeSession) return
+  const activeSession = chatStore.activeSession
+  if (!activeSession) {
+    ElMessage.warning('请先选择会话')
+    return
+  }
 
-  await chatStore.updateSession({
-    ...chatStore.activeSession,
-    modelCode: model,
-  })
-  await refreshActiveSession(chatStore.activeSession.sessionCode)
+  const previousModel = configStore.currentModel
+  configStore.setModel(model)
+
+  try {
+    await chatStore.updateSession({
+      ...activeSession,
+      modelCode: model,
+    })
+    await refreshActiveSession(activeSession.sessionCode)
+  } catch (error) {
+    configStore.setModel(previousModel)
+    ElMessage.error((error as Error).message || '更新模型失败，请重试')
+  }
 }
 
 onMounted(async () => {
-  await chatStore.loadSessions()
+  const [modelResult, sessionResult] = await Promise.allSettled([
+    configStore.loadModelOptions(),
+    chatStore.loadSessions(),
+  ])
+
+  if (modelResult.status === 'rejected') {
+    ElMessage.error((modelResult.reason as Error).message || '加载模型列表失败')
+  }
+
+  if (sessionResult.status === 'rejected') {
+    ElMessage.error((sessionResult.reason as Error).message || '加载会话列表失败')
+    return
+  }
+
   if (chatStore.activeSession?.modelCode) {
     configStore.setModel(chatStore.activeSession.modelCode)
   }

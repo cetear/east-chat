@@ -3,12 +3,13 @@
     <el-select
       :model-value="modelValue"
       :disabled="disabled"
+      :loading="loading"
       placeholder="选择模型"
       class="model-select"
-      @update:model-value="value => emit('update:modelValue', value)"
+      @update:model-value="(value: string) => emit('update:modelValue', value)"
     >
       <el-option
-        v-for="model in modelOptions"
+        v-for="model in options"
         :key="model.code"
         :label="model.name"
         :value="model.code"
@@ -18,26 +19,18 @@
 </template>
 
 <script setup lang="ts">
+import type { ModelOption } from '@/types/model'
+
 defineProps<{
   modelValue: string
+  options: ModelOption[]
   disabled?: boolean
+  loading?: boolean
 }>()
 
 const emit = defineEmits<{
   'update:modelValue': [value: string]
 }>()
-
-type ModelOption = {
-  code: string
-  name: string
-}
-
-const modelOptions: ModelOption[] = [
-  { code: 'deepseek-chat', name: 'DeepSeek Chat' },
-  { code: 'openai', name: 'OpenAI' },
-  { code: 'claude', name: 'Claude' },
-  { code: 'gemini', name: 'Gemini' },
-]
 </script>
 
 <style scoped>

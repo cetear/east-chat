@@ -66,6 +66,16 @@ public class ModelCatalogMysqlRepository implements ModelCatalogRepository {
     }
 
     @Override
+    public ModelDefinition findModelById(Long id) {
+        return toDomain(modelMapper.selectById(id));
+    }
+
+    @Override
+    public List<ModelDefinition> findModels() {
+        return modelMapper.selectList(null).stream().map(this::toDomain).toList();
+    }
+
+    @Override
     public void insertModel(ModelDefinition model) {
         modelMapper.insert(toEntity(model));
     }
@@ -92,6 +102,15 @@ public class ModelCatalogMysqlRepository implements ModelCatalogRepository {
     public List<ModelRoute> findRoutesByProvider(String providerCode) {
         return modelProviderMapper.selectList(
                         new LambdaQueryWrapper<ModelProviderDO>().eq(ModelProviderDO::getProviderCode, providerCode))
+                .stream()
+                .map(this::toDomain)
+                .toList();
+    }
+
+    @Override
+    public List<ModelRoute> findRoutesByModel(String modelCode) {
+        return modelProviderMapper.selectList(
+                        new LambdaQueryWrapper<ModelProviderDO>().eq(ModelProviderDO::getModelCode, modelCode))
                 .stream()
                 .map(this::toDomain)
                 .toList();

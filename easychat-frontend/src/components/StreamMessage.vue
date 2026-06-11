@@ -42,11 +42,13 @@ import ToolCard from './ToolCard.vue'
 import ObservationBlock from './ObservationBlock.vue'
 import type { StreamEventMessage } from '@/types/message'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   content: string
   loading: boolean
   streamingEvents?: StreamEventMessage[]
-}>()
+}>(), {
+  streamingEvents: () => [],
+})
 
 const renderedContent = computed(() => {
   if (!props.content) return ''

@@ -30,7 +30,7 @@
           </div>
         </div>
 
-        <div class="session-actions" v-if="session.sessionCode === activeSessionId">
+        <div v-if="session.sessionCode === activeSessionId" class="session-actions">
           <el-tooltip content="更多操作" placement="top">
             <el-button
               type="text"
@@ -109,10 +109,12 @@
 import { computed, nextTick, onBeforeUnmount, ref } from 'vue'
 import { ChatRound, Delete, Edit, MoreFilled, Plus } from '@element-plus/icons-vue'
 import type { SessionView } from '@/types/message'
+import type { ModelOption } from '@/types/model'
 
 const props = defineProps<{
   activeSessionId: string | null
   sessions: SessionView[]
+  modelOptions: ModelOption[]
 }>()
 
 const emit = defineEmits<{
@@ -132,20 +134,13 @@ const renameDialogVisible = ref(false)
 const renameTitle = ref('')
 const renameInput = ref<{ focus: () => void } | null>(null)
 
-const modelNameMap: Record<string, string> = {
-  'deepseek-chat': 'DeepSeek Chat',
-  openai: 'OpenAI',
-  claude: 'Claude',
-  gemini: 'Gemini',
-}
-
 const paginatedSessions = computed(() => {
   const start = (currentPage.value - 1) * pageSize.value
   return props.sessions.slice(start, start + pageSize.value)
 })
 
 function getModelName(modelCode: string): string {
-  return modelNameMap[modelCode] || modelCode
+  return props.modelOptions.find(item => item.code === modelCode)?.name || modelCode
 }
 
 function handleSessionClick(sessionId: string): void {

@@ -54,10 +54,10 @@ public class ChatController {
         }
     }
 
-    @PostMapping("/session")
+    @PostMapping("/createSession")
     public ResponseEntity<SessionView> createSession(@RequestBody Map<String, String> request) {
-        String modelType = request.get("modelType");
-        ChatSession session = agentFacade.createSession(modelType);
+        String modelCode = request.get("modelCode");
+        ChatSession session = agentFacade.createSession(modelCode);
         return ResponseEntity.ok(SessionView.from(session));
     }
 

@@ -3,16 +3,15 @@
     <div class="message-content">
       <div class="message-role">{{ message.role === 'user' ? 'You' : 'AI' }}</div>
 
-      <!-- Structured agent events -->
-      <ThoughtBlock v-if="message.type === 'thought'" :content="message.content" />
-      <ToolCard v-else-if="message.type === 'action'"
-        :toolName="message.toolName || ''"
-        :toolInput="message.toolInput"
-        :toolOutput="message.toolOutput"
+      <ThoughtBlock v-if="eventType === 'thought'" :content="message.content" />
+      <ToolCard
+        v-else-if="eventType === 'action'"
+        :toolName="toolName"
+        :toolInput="toolInput"
+        :toolOutput="toolOutput"
       />
-      <ObservationBlock v-else-if="message.type === 'observation'" :content="message.content" />
+      <ObservationBlock v-else-if="eventType === 'observation'" :content="message.content" />
 
-      <!-- Normal text message with Markdown -->
       <div v-else class="message-text" v-html="renderedContent"></div>
     </div>
   </div>
@@ -29,6 +28,22 @@ import type { ChatMessage as PlainChatMessage, StreamEventMessage } from '@/type
 const props = defineProps<{
   message: PlainChatMessage | StreamEventMessage
 }>()
+
+const eventType = computed(() => {
+  return 'type' in props.message ? props.message.type : null
+})
+
+const toolName = computed(() => {
+  return 'toolName' in props.message ? props.message.toolName || '' : ''
+})
+
+const toolInput = computed(() => {
+  return 'toolInput' in props.message ? props.message.toolInput : undefined
+})
+
+const toolOutput = computed(() => {
+  return 'toolOutput' in props.message ? props.message.toolOutput : undefined
+})
 
 const renderedContent = computed(() => {
   if (!props.message.content) return ''

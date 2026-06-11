@@ -21,6 +21,10 @@ public interface ModelCatalogRepository {
 
     ModelDefinition findModelByCode(String modelCode);
 
+    ModelDefinition findModelById(Long id);
+
+    List<ModelDefinition> findModels();
+
     void insertModel(ModelDefinition model);
 
     void updateModel(ModelDefinition model);
@@ -30,6 +34,8 @@ public interface ModelCatalogRepository {
     ModelRoute findRoute(String modelCode, String providerCode);
 
     List<ModelRoute> findRoutesByProvider(String providerCode);
+
+    List<ModelRoute> findRoutesByModel(String modelCode);
 
     void insertRoute(ModelRoute route);
 
