@@ -25,11 +25,10 @@ export function chat(data: ChatRequest): Promise<ChatResponse> {
   })
 }
 
-export function createSession(modelCode: string): Promise<SessionView> {
+export function createSession(): Promise<SessionView> {
   return requestJson<SessionView>(`${BASE}/session`, {
     method: 'POST',
     headers: jsonHeaders,
-    body: JSON.stringify({ modelType: modelCode }),
   })
 }
 

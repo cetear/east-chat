@@ -1,11 +1,16 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL?.trim() || ''
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL?.trim() || '').replace(/\/+$/, '')
 
 function buildUrl(path: string): string {
+  if (/^https?:\/\//.test(path)) {
+    return path
+  }
+
   if (!API_BASE_URL) {
     return path
   }
 
-  return `${API_BASE_URL}${path}`
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`
+  return `${API_BASE_URL}${normalizedPath}`
 }
 
 export async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {

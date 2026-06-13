@@ -13,22 +13,24 @@ export function handleStreamChat(response: Response, callbacks: SSECallbacks): v
   const decoder = new TextDecoder()
   let buffer = ''
   let currentEvent = 'message'
+  let currentData: string[] = []
 
   function read(): void {
     reader.read().then(({ done, value }) => {
       if (done) {
-        if (buffer.trim()) {
-          processLine(buffer.trimEnd())
+        if (buffer) {
+          processChunk(buffer)
         }
+        flushEvent()
         return
       }
 
       buffer += decoder.decode(value, { stream: true })
-      const lines = buffer.split('\n')
-      buffer = lines.pop()!
+      const lines = buffer.split(/\r?\n/)
+      buffer = lines.pop() ?? ''
 
       for (const line of lines) {
-        processLine(line.trimEnd())
+        processLine(line)
       }
 
       read()
@@ -37,15 +39,50 @@ export function handleStreamChat(response: Response, callbacks: SSECallbacks): v
     })
   }
 
-  function processLine(line: string): void {
-    if (line.startsWith('event: ')) {
-      currentEvent = line.substring(7).trim()
-    } else if (line.startsWith('data: ')) {
-      const data = line.substring(6)
-      dispatchEvent(currentEvent, data)
-    } else if (line === '') {
-      currentEvent = 'message'
+  function processChunk(chunk: string): void {
+    const lines = chunk.split(/\r?\n/)
+    for (const line of lines) {
+      processLine(line)
     }
+  }
+
+  function processLine(line: string): void {
+    const normalizedLine = line.trimEnd()
+    if (normalizedLine === '') {
+      flushEvent()
+      return
+    }
+
+    if (normalizedLine.startsWith(':')) {
+      return
+    }
+
+    const separatorIndex = normalizedLine.indexOf(':')
+    const field = separatorIndex >= 0 ? normalizedLine.slice(0, separatorIndex) : normalizedLine
+    let value = separatorIndex >= 0 ? normalizedLine.slice(separatorIndex + 1) : ''
+    if (value.startsWith(' ')) {
+      value = value.slice(1)
+    }
+
+    if (field === 'event') {
+      currentEvent = value || 'message'
+      return
+    }
+
+    if (field === 'data') {
+      currentData.push(value)
+    }
+  }
+
+  function flushEvent(): void {
+    if (!currentData.length) {
+      currentEvent = 'message'
+      return
+    }
+
+    dispatchEvent(currentEvent, currentData.join('\n'))
+    currentEvent = 'message'
+    currentData = []
   }
 
   function dispatchEvent(event: string, data: string): void {
