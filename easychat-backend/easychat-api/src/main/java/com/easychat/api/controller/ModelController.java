@@ -206,6 +206,7 @@ public class ModelController {
         command.setDefaultTemperature(dto.getDefaultTemperature());
         command.setDefaultTopP(dto.getDefaultTopP());
         command.setDefaultConfig(dto.getDefaultConfig());
+        command.setSupportVision(dto.getSupportVision());
         command.setEnabled(dto.getEnabled());
         return command;
     }

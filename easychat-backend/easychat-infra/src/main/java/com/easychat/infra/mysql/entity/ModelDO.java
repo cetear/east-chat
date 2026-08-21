@@ -40,6 +40,9 @@ public class ModelDO {
     @TableField("default_config")
     private String defaultConfig;
 
+    @TableField("support_vision")
+    private Integer supportVision;
+
     @TableField("enabled")
     private Integer enabled;
 

@@ -8,11 +8,9 @@ import com.easychat.core.capability.AgentResponse;
 import com.easychat.core.context.ChatExecutionContext;
 import com.easychat.core.domain.chat.ChatMessage;
 import com.easychat.core.domain.chat.ChatSession;
-import com.easychat.core.domain.model.ModelDefinition;
 import com.easychat.core.event.ChatCompletedEvent;
 import com.easychat.core.port.ChatEventPublisher;
 import com.easychat.core.port.ChatMessageRepository;
-import com.easychat.core.port.ModelCatalogRepository;
 import com.easychat.core.port.ChatSessionRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -27,7 +25,7 @@ public class StreamChatUseCase {
     private ReActAgent reactAgent;
 
     @Autowired
-    private SessionUseCase sessionUseCase;
+    private ChatContextBuilder contextBuilder;
 
     @Autowired
     private ChatSessionRepository chatSessionRepository;
@@ -39,15 +37,12 @@ public class StreamChatUseCase {
     private ChatEventPublisher chatEventPublisher;
 
     @Autowired
-    private ModelCatalogRepository modelCatalogRepository;
-
-    @Autowired
     private AgentCapabilityRegistry agentCapabilityRegistry;
 
     public Flux<AgentEvent> streamChat(ChatCommand command) {
-        ChatSession session = resolveSession(command);
-        ChatExecutionContext context = buildContext(command, session);
-        AgentRequest agentRequest = buildAgentRequest(command, session);
+        ChatSession session = contextBuilder.resolveSession(command);
+        ChatExecutionContext context = contextBuilder.buildContext(command, session);
+        AgentRequest agentRequest = contextBuilder.buildAgentRequest(command, session);
         agentCapabilityRegistry.beforeRun(agentRequest, context);
 
         insertMessage(session.getId(), "user", command.getUserMessage(), 1, context.getModelCode());
@@ -79,47 +74,6 @@ public class StreamChatUseCase {
                     event.setLatencyMs((int) (System.currentTimeMillis() - start));
                     chatEventPublisher.publish(event);
                 });
-    }
-
-    private ChatSession resolveSession(ChatCommand command) {
-        if (command.getSessionCode() != null) {
-            return sessionUseCase.getSession(command.getSessionCode());
-        }
-        return sessionUseCase.createSession();
-    }
-
-    private ChatExecutionContext buildContext(ChatCommand command, ChatSession session) {
-        ChatExecutionContext context = new ChatExecutionContext();
-        context.setSessionId(session.getId());
-        context.setSessionCode(session.getSessionCode());
-        context.setModelCode(command.getModelCode());
-        applyModelDefaults(context);
-        context.setToolsEnabled(command.isToolsEnabled());
-        context.setRagEnabled(command.isRagEnabled());
-        return context;
-    }
-
-    private void applyModelDefaults(ChatExecutionContext context) {
-        if (context.getModelCode() == null) {
-            return;
-        }
-        ModelDefinition model = modelCatalogRepository.findModelByCode(context.getModelCode());
-        if (model == null || model.getEnabled() != null && model.getEnabled() == 0) {
-            return;
-        }
-        context.setMaxOutputTokens(model.getMaxOutputTokens());
-        context.setDefaultTemperature(model.getDefaultTemperature());
-        context.setDefaultTopP(model.getDefaultTopP());
-        context.setDefaultConfig(model.getDefaultConfig());
-    }
-
-    private AgentRequest buildAgentRequest(ChatCommand command, ChatSession session) {
-        AgentRequest request = new AgentRequest();
-        request.setSessionId(session.getId());
-        request.setUserMessage(command.getUserMessage());
-        request.setToolsEnabled(command.isToolsEnabled());
-        request.setRagEnabled(command.isRagEnabled());
-        return request;
     }
 
     private ChatMessage insertMessage(Long sessionId, String role, String content, Integer status, String modelCode) {

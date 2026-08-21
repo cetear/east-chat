@@ -67,6 +67,7 @@ CREATE TABLE model (
     default_temperature   DECIMAL(4,3) COMMENT '默认 temperature',
     default_top_p         DECIMAL(4,3) COMMENT '默认 top_p',
     default_config        JSON COMMENT '模型默认扩展参数，如 stop/seed/response_format/reasoning_effort',
+    support_vision        TINYINT DEFAULT 0 COMMENT '是否支持图片输入：1=支持 0=不支持',
     enabled               TINYINT DEFAULT 1 COMMENT '是否启用：1=启用 0=禁用',
     created_at            DATETIME(3) COMMENT '创建时间',
     updated_at            DATETIME(3) COMMENT '更新时间',

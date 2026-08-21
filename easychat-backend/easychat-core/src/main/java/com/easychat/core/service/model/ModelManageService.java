@@ -100,6 +100,7 @@ public class ModelManageService {
         model.setDefaultTemperature(command.getDefaultTemperature());
         model.setDefaultTopP(command.getDefaultTopP());
         model.setDefaultConfig(normalizeJsonConfig(command.getDefaultConfig()));
+        model.setSupportVision(command.getSupportVision() != null ? command.getSupportVision() : 0);
         model.setEnabled(command.getEnabled() != null ? command.getEnabled() : 1);
         model.setCreatedAt(now);
         model.setUpdatedAt(now);
@@ -154,6 +155,9 @@ public class ModelManageService {
         }
         if (command.getDefaultConfig() != null) {
             model.setDefaultConfig(normalizeJsonConfig(command.getDefaultConfig()));
+        }
+        if (command.getSupportVision() != null) {
+            model.setSupportVision(command.getSupportVision());
         }
         if (command.getEnabled() != null) {
             model.setEnabled(command.getEnabled());

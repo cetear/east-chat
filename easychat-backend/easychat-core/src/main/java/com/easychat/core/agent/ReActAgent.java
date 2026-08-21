@@ -41,13 +41,58 @@ public class ReActAgent implements StreamingAgent {
     @Override
     public AgentResult run(AgentContext context) {
         try {
-            String prompt = buildPrompt(context);
-            String response = chat(prompt, context);
-            return AgentResult.success(response);
+            boolean useTools = context.isToolsEnabled()
+                && toolRegistry != null
+                && !toolRegistry.getAllTools().isEmpty();
+
+            if (!useTools) {
+                String prompt = buildPrompt(context);
+                String response = chat(prompt, context);
+                return AgentResult.success(response);
+            }
+
+            return reactRun(context);
         } catch (Exception e) {
             log.error("Agent execution failed", e);
             return AgentResult.error(e.getMessage());
         }
+    }
+
+    private AgentResult reactRun(AgentContext context) {
+        String systemPrompt = buildReActPrompt(context);
+        StringBuilder conversation = new StringBuilder(systemPrompt);
+
+        for (int i = 0; i < context.getMaxIterations(); i++) {
+            String llmResponse = chat(conversation.toString(), context);
+            ReActStep step = ReActOutputParser.parse(llmResponse);
+
+            if (step.isFinished()) {
+                return AgentResult.success(step.getFinalAnswer());
+            }
+
+            if (step.hasAction()) {
+                String toolResult;
+                Tool tool = toolRegistry.getTool(step.getAction());
+                if (tool != null) {
+                    try {
+                        toolResult = tool.execute(parseActionInput(step.getActionInput()));
+                    } catch (Exception e) {
+                        toolResult = "Error executing tool: " + e.getMessage();
+                    }
+                } else {
+                    toolResult = "Error: Tool '" + step.getAction() + "' not found. Available tools: "
+                        + toolRegistry.getAllTools().values().stream().map(Tool::name).collect(Collectors.joining(", "));
+                }
+
+                conversation.append("\n").append(llmResponse)
+                    .append("\nObservation: ").append(toolResult).append("\n");
+                continue;
+            }
+
+            return AgentResult.success(step.getFinalAnswer() != null ? step.getFinalAnswer() : llmResponse);
+        }
+
+        return AgentResult.success("I was unable to fully resolve your request within the allowed reasoning steps. Please try simplifying your question.");
     }
 
     @Override
@@ -157,6 +202,8 @@ public class ReActAgent implements StreamingAgent {
     private String buildPrompt(AgentContext context) {
         StringBuilder prompt = new StringBuilder();
 
+        appendMemoryAndContext(prompt, context);
+
         List<ChatMessageDO> history = conversationMemory.getRecentMessages(
             context.getSessionId(), 10);
 
@@ -172,6 +219,18 @@ public class ReActAgent implements StreamingAgent {
         prompt.append("Assistant: ");
 
         return prompt.toString();
+    }
+
+    private void appendMemoryAndContext(StringBuilder prompt, AgentContext context) {
+        String summary = conversationMemory.getSummary(context.getSessionId());
+        if (summary != null && !summary.isBlank()) {
+            prompt.append("[Conversation summary]\n").append(summary).append("\n\n");
+        }
+
+        Object retrieved = context.getVariable("retrievedContext");
+        if (retrieved != null && !retrieved.toString().isBlank()) {
+            prompt.append("[Reference information]\n").append(retrieved).append("\n\n");
+        }
     }
 
     private String chat(String prompt, AgentContext context) {
@@ -216,6 +275,8 @@ public class ReActAgent implements StreamingAgent {
             .replace("{{maxIterations}}", String.valueOf(context.getMaxIterations()));
 
         prompt.append(systemPrompt).append("\n\n");
+
+        appendMemoryAndContext(prompt, context);
 
         // 加载历史消息
         List<ChatMessageDO> history = conversationMemory.getRecentMessages(

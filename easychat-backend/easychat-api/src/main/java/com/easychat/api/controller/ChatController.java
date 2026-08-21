@@ -36,7 +36,7 @@ public class ChatController {
 
         ChatSession session = resolveOrCreateSession(request.getSessionId());
         return agentFacade.streamChat(session.getId(), modelCode, userMessage,
-                request.isToolsEnabled(), request.isRagEnabled());
+                request.isToolsEnabled(), request.isRagEnabled(), getLastUserImages(request));
     }
 
     @PostMapping("/chat")
@@ -46,7 +46,8 @@ public class ChatController {
             String userMessage = getLastUserMessage(request);
 
             ChatSession session = resolveOrCreateSession(request.getSessionId());
-            String response = agentFacade.chat(session.getId(), modelCode, userMessage);
+            String response = agentFacade.chat(session.getId(), modelCode, userMessage,
+                    request.isToolsEnabled(), request.isRagEnabled(), getLastUserImages(request));
 
             return ResponseEntity.ok(Map.of(
                     "content", response,
@@ -111,6 +112,17 @@ public class ChatController {
             throw badRequest("last message is required");
         }
         return requireText(lastMessage.getContent(), "last message content is required");
+    }
+
+    private List<String> getLastUserImages(ChatRequest request) {
+        if (request == null || request.getMessages() == null || request.getMessages().isEmpty()) {
+            return null;
+        }
+        MessageDTO lastMessage = request.getMessages().get(request.getMessages().size() - 1);
+        if (lastMessage == null || lastMessage.getImages() == null || lastMessage.getImages().isEmpty()) {
+            return null;
+        }
+        return lastMessage.getImages();
     }
 
     private String requireText(String value, String message) {

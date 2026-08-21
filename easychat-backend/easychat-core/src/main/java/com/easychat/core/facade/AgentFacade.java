@@ -28,7 +28,7 @@ public class AgentFacade {
     @Autowired
     private SessionUseCase sessionUseCase;
 
-    public SseEmitter streamChat(Long sessionId, String modelCode, String userMessage, boolean toolsEnabled, boolean ragEnabled) {
+    public SseEmitter streamChat(Long sessionId, String modelCode, String userMessage, boolean toolsEnabled, boolean ragEnabled, List<String> images) {
         ChatSession session = sessionUseCase.getSessionById(sessionId);
 
         ChatCommand command = new ChatCommand();
@@ -37,6 +37,7 @@ public class AgentFacade {
         command.setUserMessage(userMessage);
         command.setToolsEnabled(toolsEnabled);
         command.setRagEnabled(ragEnabled);
+        command.setImages(images);
 
         SseEmitter emitter = SSEUtil.createEmitter();
         AtomicReference<Disposable> subscriptionRef = new AtomicReference<>();
@@ -57,13 +58,16 @@ public class AgentFacade {
         return emitter;
     }
 
-    public String chat(Long sessionId, String modelCode, String userMessage) {
+    public String chat(Long sessionId, String modelCode, String userMessage, boolean toolsEnabled, boolean ragEnabled, List<String> images) {
         ChatSession session = sessionUseCase.getSessionById(sessionId);
 
         ChatCommand command = new ChatCommand();
         command.setSessionCode(session.getSessionCode());
         command.setModelCode(modelCode);
         command.setUserMessage(userMessage);
+        command.setToolsEnabled(toolsEnabled);
+        command.setRagEnabled(ragEnabled);
+        command.setImages(images);
         ChatResult result = chatUseCase.chat(command);
         return result.getContent();
     }

@@ -1,7 +1,8 @@
 package com.easychat.core.router;
 
 import com.easychat.llm.client.LLMClient;
-import com.easychat.llm.client.impl.LangChain4jLLMClient;
+import com.easychat.llm.config.LLMProperties;
+import com.easychat.llm.provider.OpenAICompatibleProvider;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -9,19 +10,27 @@ import org.springframework.context.annotation.Primary;
 
 /**
  * LLM 路由配置：
- * - {@code langchain4jLLMClient} 作为单渠道降级客户端（带限定符）
+ * - {@code fallbackLLMClient} 作为单渠道降级客户端（基于默认配置的 OpenAI 兼容实现）
  * - {@code modelRouter} 作为主客户端，注入到 ReActAgent 等消费方
  */
 @Configuration
 public class RouterConfig {
 
     /**
-     * 原始单渠道客户端，作为降级兜底。
-     * 限定符为 "langchain4j"，防止与 ModelRouter 冲突。
+     * 默认兜底客户端，使用 application.yml 中的 easychat.llm 配置。
      */
-    @Bean("langchain4j")
-    public LLMClient langchain4jLLMClient(LangChain4jLLMClient impl) {
-        return impl;
+    @Bean
+    public LLMClient fallbackLLMClient(LLMProperties properties) {
+        return new OpenAICompatibleProvider(
+                "default",
+                properties.getApiKey(),
+                properties.getBaseUrl(),
+                properties.getModelName(),
+                properties.getTemperature(),
+                null,
+                properties.getMaxTokens(),
+                60_000
+        );
     }
 
     /**
@@ -30,7 +39,7 @@ public class RouterConfig {
     @Bean
     @Primary
     public ModelRouter modelRouter(ProviderRegistry registry,
-                                   @Qualifier("langchain4j") LLMClient fallback) {
+                                   @Qualifier("fallbackLLMClient") LLMClient fallback) {
         return new ModelRouter(registry, fallback);
     }
 }

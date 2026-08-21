@@ -15,7 +15,7 @@
     <packaging>jar</packaging>
 
     <name>EasyChat Core</name>
-    <description>Agent core logic</description>
+    <description>Core: domain, use cases, agent, routing, LLM client, capabilities</description>
 
     <dependencies>
         <dependency>
@@ -26,21 +26,21 @@
             <groupId>com.easychat</groupId>
             <artifactId>easychat-infra</artifactId>
         </dependency>
+
+        <!-- LangChain4j -->
         <dependency>
-            <groupId>com.easychat</groupId>
-            <artifactId>easychat-llm</artifactId>
+            <groupId>dev.langchain4j</groupId>
+            <artifactId>langchain4j</artifactId>
         </dependency>
         <dependency>
-            <groupId>com.easychat</groupId>
-            <artifactId>easychat-tools</artifactId>
+            <groupId>dev.langchain4j</groupId>
+            <artifactId>langchain4j-open-ai</artifactId>
         </dependency>
+
+        <!-- Reactor Core for Flux -->
         <dependency>
-            <groupId>com.easychat</groupId>
-            <artifactId>easychat-rag</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>com.easychat</groupId>
-            <artifactId>easychat-memory</artifactId>
+            <groupId>io.projectreactor</groupId>
+            <artifactId>reactor-core</artifactId>
         </dependency>
 
         <dependency>

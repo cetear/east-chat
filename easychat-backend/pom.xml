@@ -16,11 +16,6 @@
     <modules>
         <module>easychat-common</module>
         <module>easychat-infra</module>
-        <module>easychat-memory</module>
-        <module>easychat-rag</module>
-        <module>easychat-tools</module>
-        <module>easychat-llm</module>
-        <module>easychat-multimodal</module>
         <module>easychat-core</module>
         <module>easychat-api</module>
         <module>easychat-app</module>
@@ -34,7 +29,7 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 
         <!-- Spring Boot -->
-        <spring-boot.version>3.2.5</spring-boot.version>
+        <spring-boot.version>3.4.13</spring-boot.version>
 
         <!-- LangChain4j -->
         <langchain4j.version>0.36.0</langchain4j.version>
@@ -51,9 +46,6 @@
         <lombok.version>1.18.30</lombok.version>
         <jackson.version>2.15.3</jackson.version>
         <httpclient5.version>5.3</httpclient5.version>
-
-        <!-- Resilience4j -->
-        <resilience4j.version>2.2.0</resilience4j.version>
     </properties>
     <dependencies>
         <!-- 阿里巴巴数据库连接池 -->
@@ -88,31 +80,6 @@
             </dependency>
             <dependency>
                 <groupId>com.easychat</groupId>
-                <artifactId>easychat-memory</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.easychat</groupId>
-                <artifactId>easychat-rag</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.easychat</groupId>
-                <artifactId>easychat-tools</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.easychat</groupId>
-                <artifactId>easychat-llm</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.easychat</groupId>
-                <artifactId>easychat-multimodal</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.easychat</groupId>
                 <artifactId>easychat-core</artifactId>
                 <version>${project.version}</version>
             </dependency>
@@ -127,18 +94,6 @@
                 <version>${project.version}</version>
             </dependency>
 
-            <!-- Resilience4j -->
-            <dependency>
-                <groupId>io.github.resilience4j</groupId>
-                <artifactId>resilience4j-spring-boot3</artifactId>
-                <version>${resilience4j.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>io.github.resilience4j</groupId>
-                <artifactId>resilience4j-reactor</artifactId>
-                <version>${resilience4j.version}</version>
-            </dependency>
-
             <!-- LangChain4j -->
             <dependency>
                 <groupId>dev.langchain4j</groupId>
@@ -148,11 +103,6 @@
             <dependency>
                 <groupId>dev.langchain4j</groupId>
                 <artifactId>langchain4j-open-ai</artifactId>
-                <version>${langchain4j.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>dev.langchain4j</groupId>
-                <artifactId>langchain4j-embeddings</artifactId>
                 <version>${langchain4j.version}</version>
             </dependency>
 

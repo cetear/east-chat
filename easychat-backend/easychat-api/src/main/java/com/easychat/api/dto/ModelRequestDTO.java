@@ -27,6 +27,8 @@ public class ModelRequestDTO {
     private BigDecimal defaultTopP;
     /** 默认扩展配置 **/
     private String defaultConfig;
+    /** 是否支持图片输入：1=支持 0=不支持 **/
+    private Integer supportVision;
     /** 启用配置 **/
     private Integer enabled;
 }

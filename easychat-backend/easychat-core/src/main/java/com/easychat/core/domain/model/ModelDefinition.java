@@ -17,6 +17,7 @@ public class ModelDefinition {
     private BigDecimal defaultTemperature;
     private BigDecimal defaultTopP;
     private String defaultConfig;
+    private Integer supportVision;
     private Integer enabled;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

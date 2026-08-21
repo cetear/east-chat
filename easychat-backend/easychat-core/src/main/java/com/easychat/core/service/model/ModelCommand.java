@@ -15,5 +15,6 @@ public class ModelCommand {
     private BigDecimal defaultTemperature;
     private BigDecimal defaultTopP;
     private String defaultConfig;
+    private Integer supportVision;
     private Integer enabled;
 }

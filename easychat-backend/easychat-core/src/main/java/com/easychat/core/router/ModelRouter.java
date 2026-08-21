@@ -38,10 +38,14 @@ public class ModelRouter implements LLMClient, ChatModelClient {
     }
 
     public String chat(String prompt, String modelCode, LLMCallOptions options) {
+        return chat(prompt, modelCode, options, null);
+    }
+
+    public String chat(String prompt, String modelCode, LLMCallOptions options, List<String> images) {
         List<ProviderWrapper> providers = modelCode != null ? registry.getProviders(modelCode) : List.of();
 
         if (providers.isEmpty()) {
-            return fallbackClient.chat(prompt, options);
+            return fallbackClient.chat(prompt, options, images);
         }
 
         Exception lastError = null;
@@ -52,7 +56,7 @@ public class ModelRouter implements LLMClient, ChatModelClient {
                 continue;
             }
             try {
-                String result = wrapper.getProvider().chat(prompt, options);
+                String result = wrapper.getProvider().chat(prompt, options, images);
                 wrapper.recordSuccess();
                 return result;
             } catch (Exception e) {
@@ -66,7 +70,8 @@ public class ModelRouter implements LLMClient, ChatModelClient {
 
     @Override
     public String chat(String prompt, ChatExecutionContext context) {
-        return chat(prompt, context != null ? context.getModelCode() : null, toCallOptions(context));
+        return chat(prompt, context != null ? context.getModelCode() : null,
+                toCallOptions(context), extractImages(context));
     }
 
     @Override
@@ -79,10 +84,14 @@ public class ModelRouter implements LLMClient, ChatModelClient {
     }
 
     public Flux<String> streamChat(String prompt, String modelCode, LLMCallOptions options) {
+        return streamChat(prompt, modelCode, options, null);
+    }
+
+    public Flux<String> streamChat(String prompt, String modelCode, LLMCallOptions options, List<String> images) {
         List<ProviderWrapper> providers = modelCode != null ? registry.getProviders(modelCode) : List.of();
 
         if (providers.isEmpty()) {
-            return fallbackClient.streamChat(prompt, options);
+            return fallbackClient.streamChat(prompt, options, images);
         }
 
         return Flux.create(sink -> attemptStream(
@@ -93,13 +102,15 @@ public class ModelRouter implements LLMClient, ChatModelClient {
                 options,
                 new ArrayList<>(),
                 modelCode,
+                images,
                 sink
         ));
     }
 
     @Override
     public Flux<String> streamChat(String prompt, ChatExecutionContext context) {
-        return streamChat(prompt, context != null ? context.getModelCode() : null, toCallOptions(context));
+        return streamChat(prompt, context != null ? context.getModelCode() : null,
+                toCallOptions(context), extractImages(context));
     }
 
     private void attemptStream(List<ProviderWrapper> providers,
@@ -109,6 +120,7 @@ public class ModelRouter implements LLMClient, ChatModelClient {
                                LLMCallOptions options,
                                List<String> failures,
                                String modelCode,
+                               List<String> images,
                                reactor.core.publisher.FluxSink<String> sink) {
         if (sink.isCancelled()) {
             return;
@@ -126,7 +138,7 @@ public class ModelRouter implements LLMClient, ChatModelClient {
         if (!wrapper.isAvailable()) {
             log.debug("[{}] skipped (circuit open)", providerCode);
             failures.add(providerCode + " skipped: circuit open");
-            attemptStream(providers, index + 1, partial, originalPrompt, options, failures, modelCode, sink);
+            attemptStream(providers, index + 1, partial, originalPrompt, options, failures, modelCode, images, sink);
             return;
         }
 
@@ -134,7 +146,9 @@ public class ModelRouter implements LLMClient, ChatModelClient {
                 ? originalPrompt
                 : buildContinuationPrompt(originalPrompt, partial.toString());
 
-        wrapper.getProvider().streamChat(effectivePrompt, options)
+        List<String> effectiveImages = partial.isEmpty() ? images : null;
+
+        wrapper.getProvider().streamChat(effectivePrompt, options, effectiveImages)
                 .subscribe(
                         token -> {
                             if (!sink.isCancelled()) {
@@ -151,7 +165,7 @@ public class ModelRouter implements LLMClient, ChatModelClient {
                             wrapper.recordFailure();
                             failures.add(providerCode + " failed: " + error.getMessage());
                             attemptStream(providers, index + 1, partial, originalPrompt, options,
-                                    failures, modelCode, sink);
+                                    failures, modelCode, images, sink);
                         },
                         () -> {
                             if (!sink.isCancelled()) {
@@ -181,6 +195,16 @@ public class ModelRouter implements LLMClient, ChatModelClient {
         options.setTopP(toDouble(context.getDefaultTopP()));
         applyDefaultConfig(options, context.getDefaultConfig());
         return options;
+    }
+
+    private List<String> extractImages(ChatExecutionContext context) {
+        if (context == null || context.getImages() == null || context.getImages().isEmpty()) {
+            return null;
+        }
+        if (context.isToolsEnabled()) {
+            return null;
+        }
+        return context.getImages();
     }
 
     private Double toDouble(BigDecimal value) {

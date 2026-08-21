@@ -18,6 +18,7 @@ public class ModelView {
     private BigDecimal defaultTemperature;
     private BigDecimal defaultTopP;
     private String defaultConfig;
+    private Integer supportVision;
     private Integer enabled;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
@@ -37,6 +38,7 @@ public class ModelView {
         view.setDefaultTemperature(entity.getDefaultTemperature());
         view.setDefaultTopP(entity.getDefaultTopP());
         view.setDefaultConfig(entity.getDefaultConfig());
+        view.setSupportVision(entity.getSupportVision());
         view.setEnabled(entity.getEnabled());
         view.setCreatedAt(entity.getCreatedAt());
         view.setUpdatedAt(entity.getUpdatedAt());

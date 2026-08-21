@@ -196,6 +196,7 @@ public class ModelCatalogMysqlRepository implements ModelCatalogRepository {
         model.setDefaultTemperature(entity.getDefaultTemperature());
         model.setDefaultTopP(entity.getDefaultTopP());
         model.setDefaultConfig(entity.getDefaultConfig());
+        model.setSupportVision(entity.getSupportVision());
         model.setEnabled(entity.getEnabled());
         model.setCreatedAt(entity.getCreatedAt());
         model.setUpdatedAt(entity.getUpdatedAt());
@@ -214,6 +215,7 @@ public class ModelCatalogMysqlRepository implements ModelCatalogRepository {
         entity.setDefaultTemperature(model.getDefaultTemperature());
         entity.setDefaultTopP(model.getDefaultTopP());
         entity.setDefaultConfig(model.getDefaultConfig());
+        entity.setSupportVision(model.getSupportVision());
         entity.setEnabled(model.getEnabled());
         entity.setCreatedAt(model.getCreatedAt());
         entity.setUpdatedAt(model.getUpdatedAt());
