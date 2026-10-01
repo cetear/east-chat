@@ -1,6 +1,5 @@
 package com.easychat.api.controller;
 
-import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import com.easychat.api.dto.EsDocumentRequest;
 import com.easychat.common.model.Result;
 import com.easychat.infra.es.EsClientWrapper;
@@ -17,46 +16,37 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/es")
+@org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(name="easychat.es.enabled",havingValue="true",matchIfMissing=true)
 public class EsController {
-
-    @Autowired
-    private ElasticsearchClient elasticsearchClient;  // Spring Boot 自动注入
 
     @Autowired
     private EsClientWrapper esClientWrapper;
 
     @GetMapping("/test")
     public String testEs() throws Exception {
-        var info = elasticsearchClient.info();
-        return "连接成功: " + info.clusterName();
+        return "连接成功: " + esClientWrapper.clusterName();
     }
 
-    @GetMapping("/documents")
+    @GetMapping("/getDocuments")
     public Result<List<Map<String, Object>>> getAllDocuments(
             @RequestParam(value = "index", defaultValue = "easychat") String index,
             @RequestParam(value = "size", defaultValue = "100") int size) {
-        try {
             return Result.success(esClientWrapper.searchAll(index, size));
-        } catch (Exception e) {
-            return Result.error(e.getMessage());
-        }
+
     }
 
-    @PostMapping("/document")
+    @PostMapping("/indexDocument")
     public Result<String> indexDocument(@RequestBody EsDocumentRequest request) {
         if (request == null || request.getIndex() == null || request.getIndex().isBlank()) {
-            return Result.error(400, "index is required");
+            throw new IllegalArgumentException("index is required");
         }
         if (request.getDocument() == null || request.getDocument().isEmpty()) {
-            return Result.error(400, "document is required");
+            throw new IllegalArgumentException("document is required");
         }
-        try {
             String result = esClientWrapper.indexDocument(
                 request.getIndex(), request.getId(), request.getDocument());
             return Result.success(result);
-        } catch (Exception e) {
-            return Result.error(e.getMessage());
-        }
+
     }
 
 }

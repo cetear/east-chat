@@ -1,98 +1,29 @@
 package com.easychat.core.service.chat;
-
-import com.easychat.core.agent.ReActAgent;
-import com.easychat.core.capability.AgentCapabilityRegistry;
-import com.easychat.core.capability.AgentRequest;
-import com.easychat.core.capability.AgentResponse;
-import com.easychat.core.context.ChatExecutionContext;
-import com.easychat.core.domain.chat.ChatMessage;
-import com.easychat.core.domain.chat.ChatSession;
-import com.easychat.core.event.ChatCompletedEvent;
-import com.easychat.core.event.ChatMessageCreatedEvent;
-import com.easychat.core.port.ChatEventPublisher;
-import com.easychat.core.port.ChatMessageRepository;
-import com.easychat.core.port.ChatSessionRepository;
+import com.easychat.core.agent.AgentEvent;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-
-import java.time.LocalDateTime;
-
 @Service
 public class ChatUseCase {
-
-    @Autowired
-    private ReActAgent reactAgent;
-
-    @Autowired
-    private ChatContextBuilder contextBuilder;
-
-    @Autowired
-    private ChatSessionRepository chatSessionRepository;
-
-    @Autowired
-    private ChatMessageRepository chatMessageRepository;
-
-    @Autowired
-    private ChatEventPublisher chatEventPublisher;
-
-    @Autowired
-    private AgentCapabilityRegistry agentCapabilityRegistry;
-
+    @org.springframework.beans.factory.annotation.Autowired private com.fasterxml.jackson.databind.ObjectMapper json;
+    @Autowired private ChatExecutionService execution;
     public ChatResult chat(ChatCommand command) {
-        ChatSession session = contextBuilder.resolveSession(command);
-        ChatExecutionContext context = contextBuilder.buildContext(command, session);
-        long start = System.currentTimeMillis();
-        AgentRequest agentRequest = contextBuilder.buildAgentRequest(command, session);
-        agentCapabilityRegistry.beforeRun(agentRequest, context);
-
-        ChatMessage userMsg = insertMessage(session.getId(), "user", command.getUserMessage(), 1, context.getModelCode());
-        publishMessageCreated(context, userMsg);
-
-        String response = reactAgent.run(context.toAgentContext(command.getUserMessage())).getResponse();
-        AgentResponse agentResponse = new AgentResponse();
-        agentResponse.setContent(response);
-        agentCapabilityRegistry.afterRun(agentResponse, context);
-
-        ChatMessage aiMsg = insertMessage(session.getId(), "assistant", response, 1, context.getModelCode());
-        publishMessageCreated(context, aiMsg);
-
-        session.setUpdatedAt(LocalDateTime.now());
-        chatSessionRepository.update(session);
-
-        ChatCompletedEvent completedEvent = new ChatCompletedEvent();
-        completedEvent.setSessionId(session.getId());
-        completedEvent.setSessionCode(session.getSessionCode());
-        completedEvent.setMessageId(aiMsg.getId());
-        completedEvent.setModelCode(context.getModelCode());
-        completedEvent.setLatencyMs((int) (System.currentTimeMillis() - start));
-        chatEventPublisher.publish(completedEvent);
-
         ChatResult result = new ChatResult();
-        result.setSessionCode(session.getSessionCode());
-        result.setContent(response);
-        return result;
-    }
-
-    private ChatMessage insertMessage(Long sessionId, String role, String content, Integer status, String modelCode) {
-        ChatMessage message = new ChatMessage();
-        message.setSessionId(sessionId);
-        message.setRole(role);
-        message.setContent(content);
-        message.setContentType("text");
-        message.setMessageOrder(chatMessageRepository.nextMessageOrder(sessionId));
-        message.setModelCode(modelCode);
-        message.setStatus(status);
-        message.setCreatedAt(LocalDateTime.now());
-        return chatMessageRepository.insert(message);
-    }
-
-    private void publishMessageCreated(ChatExecutionContext context, ChatMessage message) {
-        ChatMessageCreatedEvent event = new ChatMessageCreatedEvent();
-        event.setSessionId(context.getSessionId());
-        event.setSessionCode(context.getSessionCode());
-        event.setMessageId(message.getId());
-        event.setModelCode(context.getModelCode());
-        event.setRole(message.getRole());
-        chatEventPublisher.publish(event);
+        StringBuilder content = new StringBuilder();
+        execution.execute(command).doOnNext(event -> {
+            switch (event.getType()) {
+                case MESSAGE -> content.append(event.getContent());
+                case SOURCES -> result.setSources(event.getContent());
+                case WARNING -> result.setWarning(event.getContent());
+                case META -> {
+                    var meta=event.getMetadata();result.setSessionCode((String)meta.get("sessionId"));
+                    if(meta.containsKey("finishReason"))result.setFinishReason((String)meta.get("finishReason"));
+                    if(meta.containsKey("usage"))result.setUsage((java.util.Map<String,Object>)meta.get("usage"));
+                    if(meta.containsKey("providerCode"))result.setProviderCode((String)meta.get("providerCode"));
+                }
+                default -> {}
+            }
+        }).blockLast();
+        result.setContent(content.toString()); if(result.getFinishReason()==null) result.setFinishReason("stop"); return result;
     }
 }

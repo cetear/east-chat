@@ -1,47 +1,28 @@
 package com.easychat.rag.retriever.impl;
-
 import com.easychat.infra.es.EsClientWrapper;
-import com.easychat.rag.retriever.Retriever;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import lombok.extern.slf4j.Slf4j;
+import com.easychat.rag.retriever.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
-
-import java.util.List;
-import java.util.Map;
-
-@Slf4j
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import java.util.*;
 @Component
+@ConditionalOnProperty(name="easychat.es.enabled",havingValue="true",matchIfMissing=true)
 public class EsRetriever implements Retriever {
-
-    @Autowired
-    private EsClientWrapper esClientWrapper;
-
-    @Value("${easychat.rag.index:easychat}")
-    private String index;
-
-    private final ObjectMapper objectMapper = new ObjectMapper();
-
-    @Override
-    public List<Document> search(String query, int topK) {
-        List<Map<String, Object>> hits = esClientWrapper.search(index, query, topK);
-        return hits.stream().map(this::toDocument).toList();
+    @Autowired private EsClientWrapper esClientWrapper;
+    @Value("${easychat.rag.index:easychat_kb}") private String index;
+    public List<Document> search(RetrievalRequest request) {
+        return esClientWrapper.matchSearch(index,"content",request.query(),request.topK(),request.dataset(),request.ownerId()).stream().map(EsRetriever::document).toList();
     }
-
-    private Document toDocument(Map<String, Object> hit) {
-        Document doc = new Document();
-        doc.setScore(0.0);
-        Object content = hit.get("content");
-        if (content != null) {
-            doc.setContent(content.toString());
-        } else {
-            try {
-                doc.setContent(objectMapper.writeValueAsString(hit));
-            } catch (Exception e) {
-                doc.setContent(hit.toString());
-            }
-        }
-        return doc;
+    public static Document document(EsClientWrapper.SearchHit hit) {
+        var source=hit.getSource();
+        Document doc=new Document();
+        doc.setId(Objects.toString(source.get("chunk_id"),hit.getId()));
+        doc.setDocId(Objects.toString(source.get("doc_id"),hit.getId()));
+        doc.setContent(Objects.toString(source.get("content"),""));
+        doc.setTitle(Objects.toString(source.get("title"),doc.getDocId()));
+        doc.setHeadingPath(Objects.toString(source.get("heading_path"),""));
+        if (source.get("page_no") instanceof Number page) doc.setPageNo(page.intValue());
+        doc.setScore(hit.getScore()); return doc;
     }
 }

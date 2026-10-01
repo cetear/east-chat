@@ -1,67 +1,69 @@
 package com.easychat.api.controller;
 
-import com.easychat.api.dto.ChatRequest;
-import com.easychat.api.dto.MessageDTO;
-import com.easychat.core.domain.chat.ChatSession;
-import com.easychat.core.facade.AgentFacade;
-import com.easychat.core.service.chat.SessionView;
+import com.easychat.api.dto.*;
+import com.easychat.common.util.DatasetId;
+import com.easychat.common.domain.chat.*;
+import com.easychat.api.facade.AgentFacade;
+import com.easychat.core.service.chat.*;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.DeleteMapping;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.PutMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.server.ResponseStatusException;
+import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+import org.springframework.web.server.ResponseStatusException;
+import org.springframework.http.HttpStatus;
 
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 @RestController
 @RequestMapping("/api")
 public class ChatController {
-
     @Autowired
     private AgentFacade agentFacade;
 
     @PostMapping("/chat/stream")
     public SseEmitter streamChat(@RequestBody ChatRequest request) {
-        String modelCode = requireText(request.getModel(), "model is required");
-        String userMessage = getLastUserMessage(request);
-
-        ChatSession session = resolveOrCreateSession(request.getSessionId());
-        return agentFacade.streamChat(session.getId(), modelCode, userMessage,
-                request.isToolsEnabled(), request.isRagEnabled(), getLastUserImages(request));
+        return agentFacade.streamChat(command(request));
     }
 
     @PostMapping("/chat")
-    public ResponseEntity<Map<String, Object>> chat(@RequestBody ChatRequest request) {
+    public ResponseEntity<ChatResponse> chat(@RequestBody ChatRequest request) {
+        return ResponseEntity.ok(ChatResponse.from(agentFacade.chat(command(request))));
+    }
+
+    private ChatCommand command(ChatRequest request) {
+        if (request == null || request.getMessages() == null || request.getMessages().isEmpty())
+            throw bad("messages is required");
+        MessageDTO message = request.getMessages().get(request.getMessages().size() - 1);
+        if (message == null || !com.easychat.common.constant.MessageRole.USER.getValue().equals(message.getRole()))
+            throw bad("last message role must be user");
+        ChatCommand command = new ChatCommand();
+        command.setActor(com.easychat.common.security.ActorContext.current());
+        command.setUserMessage((message.getContent() == null || message.getContent().isBlank()) && message.getImages() != null && !message.getImages().isEmpty() ? "" : text(message.getContent(), "content"));
+        command.setModelCode(text(request.getModel(), "model"));
+        command.setSessionCode(request.getSessionId() == null || request.getSessionId().isBlank() ? null : request.getSessionId().trim());
         try {
-            String modelCode = requireText(request.getModel(), "model is required");
-            String userMessage = getLastUserMessage(request);
-
-            ChatSession session = resolveOrCreateSession(request.getSessionId());
-            String response = agentFacade.chat(session.getId(), modelCode, userMessage,
-                    request.isToolsEnabled(), request.isRagEnabled(), getLastUserImages(request));
-
-            return ResponseEntity.ok(Map.of(
-                    "content", response,
-                    "sessionId", session.getSessionCode()
-            ));
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+            command.setDataset(DatasetId.normalize(request.getDataset()));
+        } catch (IllegalArgumentException e) {
+            throw bad(e.getMessage());
         }
+        command.setToolsEnabled(request.isToolsEnabled());
+        command.setRagEnabled(request.isRagEnabled());
+        command.setImages(message.getImages());
+        return command;
+    }
+
+    private String text(String value, String name) {
+        if (value == null || value.isBlank()) throw bad(name + " is required");
+        return value.trim();
+    }
+
+    private ResponseStatusException bad(String text) {
+        return new ResponseStatusException(HttpStatus.BAD_REQUEST, text);
     }
 
     @PostMapping({"/session", "/createSession"})
     public ResponseEntity<SessionView> createSession() {
-        ChatSession session = agentFacade.createSession();
-        return ResponseEntity.ok(SessionView.from(session));
+        return ResponseEntity.ok(SessionView.from(agentFacade.createSession()));
     }
 
     @GetMapping("/sessions")
@@ -74,65 +76,28 @@ public class ChatController {
         return ResponseEntity.ok(SessionView.from(agentFacade.getSession(sessionId)));
     }
 
+    @GetMapping("/session/{sessionId}/messages")
+    public List<ChatMessageView> history(@PathVariable("sessionId") String sessionId) {
+        return agentFacade.history(sessionId).stream().map(ChatMessageView::from).toList();
+    }
+
     @PutMapping("/session/{sessionId}")
-    public ResponseEntity<SessionView> updateSession(@PathVariable("sessionId") String sessionId,
-                                                     @RequestBody ChatSession session) {
-        ChatSession updated = agentFacade.updateSession(sessionId, session);
-        return ResponseEntity.ok(SessionView.from(updated));
+    public ResponseEntity<SessionView> updateSession(@PathVariable("sessionId") String sessionId, @RequestBody SessionUpdateRequest changes) {
+        return ResponseEntity.ok(SessionView.from(agentFacade.updateSession(sessionId, changes.toChanges())));
+    }
+
+    @PutMapping("/session/{sessionId}/max-rounds")
+    public ResponseEntity<SessionView> setMaxRounds(@PathVariable("sessionId") String sessionId, @RequestBody Map<String, Integer> request) {
+        Integer rounds = request.get("maxRounds");
+        if (rounds == null || rounds < 1 || rounds > 100) throw bad("maxRounds must be 1-100");
+        SessionUpdateRequest changes = new SessionUpdateRequest();
+        changes.setMaxRounds(rounds);
+        return updateSession(sessionId, changes);
     }
 
     @DeleteMapping("/session/{sessionId}")
     public ResponseEntity<Void> deleteSession(@PathVariable("sessionId") String sessionId) {
         agentFacade.deleteSession(sessionId);
         return ResponseEntity.noContent().build();
-    }
-
-    @PutMapping("/session/{sessionId}/max-rounds")
-    public ResponseEntity<SessionView> setMaxRounds(@PathVariable("sessionId") String sessionId,
-                                                    @RequestBody Map<String, Integer> request) {
-        ChatSession session = agentFacade.getSession(sessionId);
-        session.setMaxRounds(request.get("maxRounds"));
-        agentFacade.updateSession(session);
-        return ResponseEntity.ok(SessionView.from(session));
-    }
-
-    private ChatSession resolveOrCreateSession(String sessionId) {
-        if (sessionId != null && !sessionId.trim().isEmpty()) {
-            return agentFacade.getSession(sessionId.trim());
-        }
-        return agentFacade.createSession();
-    }
-
-    private String getLastUserMessage(ChatRequest request) {
-        if (request == null || request.getMessages() == null || request.getMessages().isEmpty()) {
-            throw badRequest("messages is required");
-        }
-        MessageDTO lastMessage = request.getMessages().get(request.getMessages().size() - 1);
-        if (lastMessage == null) {
-            throw badRequest("last message is required");
-        }
-        return requireText(lastMessage.getContent(), "last message content is required");
-    }
-
-    private List<String> getLastUserImages(ChatRequest request) {
-        if (request == null || request.getMessages() == null || request.getMessages().isEmpty()) {
-            return null;
-        }
-        MessageDTO lastMessage = request.getMessages().get(request.getMessages().size() - 1);
-        if (lastMessage == null || lastMessage.getImages() == null || lastMessage.getImages().isEmpty()) {
-            return null;
-        }
-        return lastMessage.getImages();
-    }
-
-    private String requireText(String value, String message) {
-        if (value == null || value.trim().isEmpty()) {
-            throw badRequest(message);
-        }
-        return value.trim();
-    }
-
-    private ResponseStatusException badRequest(String message) {
-        return new ResponseStatusException(HttpStatus.BAD_REQUEST, message);
     }
 }

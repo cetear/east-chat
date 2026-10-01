@@ -1,10 +1,10 @@
 package com.easychat.core.service.model;
 
 import com.easychat.common.exception.BusinessException;
-import com.easychat.core.domain.model.ModelDefinition;
-import com.easychat.core.domain.model.ModelRoute;
-import com.easychat.core.domain.model.ProviderAccount;
-import com.easychat.core.port.ModelCatalogRepository;
+import com.easychat.common.domain.model.ModelDefinition;
+import com.easychat.common.domain.model.ModelRoute;
+import com.easychat.common.domain.model.ProviderAccount;
+import com.easychat.common.port.ModelCatalogRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -12,10 +12,13 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 @Service
+@org.springframework.transaction.annotation.Transactional
 public class ModelManageService {
+    @org.springframework.beans.factory.annotation.Autowired private com.fasterxml.jackson.databind.ObjectMapper json;
 
     @Autowired
     private ModelCatalogRepository modelCatalogRepository;
+    @Autowired private com.easychat.core.router.ProviderRegistry registry;
 
     public void addProvider(ProviderCommand command) {
         ProviderAccount exists = modelCatalogRepository.findProviderByCode(command.getProviderCode());
@@ -34,26 +37,27 @@ public class ModelManageService {
         provider.setCreatedAt(now);
         provider.setUpdatedAt(now);
         modelCatalogRepository.insertProvider(provider);
+        refreshAfterCommit();
     }
 
-    public List<ProviderView> listProviders() {
-        return modelCatalogRepository.findProviders().stream().map(ProviderView::from).toList();
+    public List<ProviderAccount> listProviders() {
+        return modelCatalogRepository.findProviders();
     }
 
-    public ProviderView getProvider(Long id) {
+    public ProviderAccount getProvider(Long id) {
         ProviderAccount provider = modelCatalogRepository.findProviderById(id);
         if (provider == null) {
             throw new BusinessException("渠道商不存在");
         }
-        return ProviderView.from(provider);
+        return provider;
     }
 
-    public ProviderView getProviderByCode(String providerCode) {
+    public ProviderAccount getProviderByCode(String providerCode) {
         ProviderAccount provider = modelCatalogRepository.findProviderByCode(providerCode);
         if (provider == null) {
             throw new BusinessException("渠道商不存在");
         }
-        return ProviderView.from(provider);
+        return provider;
     }
 
     public void updateProvider(ProviderCommand command) {
@@ -72,6 +76,7 @@ public class ModelManageService {
         }
         provider.setUpdatedAt(LocalDateTime.now());
         modelCatalogRepository.updateProvider(provider);
+        refreshAfterCommit();
     }
 
     public void deleteProvider(String providerCode) {
@@ -80,7 +85,9 @@ public class ModelManageService {
             throw new BusinessException("渠道商不存在");
         }
         modelCatalogRepository.deleteRoutesByProvider(providerCode);
+        refreshAfterCommit();
         modelCatalogRepository.deleteProviderById(provider.getId());
+        refreshAfterCommit();
     }
 
     public void addModel(ModelCommand command) {
@@ -102,29 +109,31 @@ public class ModelManageService {
         model.setDefaultConfig(normalizeJsonConfig(command.getDefaultConfig()));
         model.setSupportVision(command.getSupportVision() != null ? command.getSupportVision() : 0);
         model.setEnabled(command.getEnabled() != null ? command.getEnabled() : 1);
+        validateModelBudget(model);
         model.setCreatedAt(now);
         model.setUpdatedAt(now);
         modelCatalogRepository.insertModel(model);
+        refreshAfterCommit();
     }
 
-    public List<ModelView> listModels() {
-        return modelCatalogRepository.findModels().stream().map(ModelView::from).toList();
+    public List<ModelDefinition> listModels() {
+        return modelCatalogRepository.findModels();
     }
 
-    public ModelView getModel(Long id) {
+    public ModelDefinition getModel(Long id) {
         ModelDefinition model = modelCatalogRepository.findModelById(id);
         if (model == null) {
             throw new BusinessException("模型不存在");
         }
-        return ModelView.from(model);
+        return model;
     }
 
-    public ModelView getModelByCode(String modelCode) {
+    public ModelDefinition getModelByCode(String modelCode) {
         ModelDefinition model = modelCatalogRepository.findModelByCode(modelCode);
         if (model == null) {
             throw new BusinessException("模型不存在");
         }
-        return ModelView.from(model);
+        return model;
     }
 
     public void updateModel(ModelCommand command) {
@@ -163,7 +172,9 @@ public class ModelManageService {
             model.setEnabled(command.getEnabled());
         }
         model.setUpdatedAt(LocalDateTime.now());
+        validateModelBudget(model);
         modelCatalogRepository.updateModel(model);
+        refreshAfterCommit();
     }
 
     public void deleteModel(String modelCode) {
@@ -172,10 +183,13 @@ public class ModelManageService {
             throw new BusinessException("模型不存在");
         }
         modelCatalogRepository.deleteRoutesByModel(modelCode);
+        refreshAfterCommit();
         modelCatalogRepository.deleteModelById(model.getId());
+        refreshAfterCommit();
     }
 
     public void addModelToProvider(String providerCode, ModelProviderCommand command) {
+        validateRoute(command);
         ProviderAccount provider = modelCatalogRepository.findProviderByCode(providerCode);
         if (provider == null) {
             throw new BusinessException("渠道商不存在");
@@ -203,30 +217,72 @@ public class ModelManageService {
         route.setCreatedAt(now);
         route.setUpdatedAt(now);
         modelCatalogRepository.insertRoute(route);
+        refreshAfterCommit();
     }
 
-    public List<ModelProviderView> listModelsByProvider(String providerCode) {
+    public List<ModelRoute> listModelsByProvider(String providerCode) {
         return modelCatalogRepository.findRoutesByProvider(providerCode)
-                .stream()
-                .map(ModelProviderView::from)
-                .toList();
+                ;
     }
 
-    public List<ModelProviderView> listProvidersByModel(String modelCode) {
+    public void updateModelProvider(String providerCode, String modelCode, ModelProviderCommand command) {
+        validateRoute(command);
+        ModelRoute route = modelCatalogRepository.findRoute(modelCode, providerCode);
+        if (route == null) throw new BusinessException("模型渠道配置不存在");
+        if (command.getPriority() != null) route.setPriority(command.getPriority());
+        if (command.getWeight() != null) route.setWeight(command.getWeight());
+        if (command.getTimeoutMs() != null) route.setTimeoutMs(command.getTimeoutMs());
+        if (command.getMaxRetry() != null) route.setMaxRetry(command.getMaxRetry());
+        if (command.getEnabled() != null) route.setEnabled(command.getEnabled());
+        route.setUpdatedAt(LocalDateTime.now());
+        modelCatalogRepository.updateRoute(route);
+        refreshAfterCommit();
+    }
+
+    private void validateRoute(ModelProviderCommand command) {
+        if(command.getWeight()!=null && command.getWeight()<1) throw new IllegalArgumentException("weight must be positive");
+        if(command.getMaxRetry()!=null && (command.getMaxRetry()<0 || command.getMaxRetry()>3)) throw new IllegalArgumentException("maxRetry must be 0-3");
+        if(command.getTimeoutMs()!=null && command.getTimeoutMs()<1) throw new IllegalArgumentException("timeoutMs must be positive");
+        if(command.getEnabled()!=null && command.getEnabled()!=0 && command.getEnabled()!=1) throw new IllegalArgumentException("enabled must be 0 or 1");
+    }
+
+    public List<ModelRoute> listProvidersByModel(String modelCode) {
         return modelCatalogRepository.findRoutesByModel(modelCode)
-                .stream()
-                .map(ModelProviderView::from)
-                .toList();
+                ;
     }
 
     public void deleteModelProvider(String providerCode, String modelCode) {
         modelCatalogRepository.deleteRoute(modelCode, providerCode);
+        refreshAfterCommit();
+    }
+
+    private void refreshAfterCommit() {
+        if (org.springframework.transaction.support.TransactionSynchronizationManager.isSynchronizationActive()) {
+            org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
+                new org.springframework.transaction.support.TransactionSynchronization() {
+                    public void afterCommit() { registry.reload(); }
+                });
+        } else registry.reload();
     }
 
     private String normalizeJsonConfig(String config) {
         if (config == null || config.isBlank()) {
             return null;
         }
+        try {
+            var node = json.readTree(config);
+            if (!node.isObject())
+                throw new IllegalArgumentException("default_config must be a JSON object");
+            if (node.has("model_name") && (!node.get("model_name").isTextual() || node.get("model_name").asText().isBlank()))
+                throw new IllegalArgumentException("model_name must be a non-empty string");
+        } catch (java.io.IOException e) { throw new IllegalArgumentException("Invalid default_config", e); }
         return config;
+    }
+
+    private void validateModelBudget(ModelDefinition model) {
+        int output = model.getMaxOutputTokens() == null ? 2000 : model.getMaxOutputTokens();
+        if (output < 1) throw new IllegalArgumentException("maxOutputTokens must be positive");
+        if (model.getContextWindow() != null && (long) model.getContextWindow() - output < 128)
+            throw new IllegalArgumentException("contextWindow must exceed maxOutputTokens by at least 128");
     }
 }

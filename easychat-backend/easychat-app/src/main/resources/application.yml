@@ -2,12 +2,18 @@ server:
   port: 8080
 
 spring:
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 21MB
+  autoconfigure:
+    exclude: org.springframework.boot.autoconfigure.elasticsearch.ElasticsearchClientAutoConfiguration,org.springframework.boot.autoconfigure.elasticsearch.ElasticsearchRestClientAutoConfiguration
   application:
     name: easychat
   datasource:
     type: com.alibaba.druid.pool.DruidDataSource
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: ${MYSQL_URL:jdbc:mysql://gz-cdb-ns0ptu89.sql.tencentcdb.com:26090/ai-chat?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&connectTimeout=10000&socketTimeout=60000&tcpKeepAlive=true}
+    url: ${MYSQL_URL:jdbc:mysql://gz-cdb-ns0ptu89.sql.tencentcdb.com:26090/es-chat?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&connectTimeout=10000&socketTimeout=60000&tcpKeepAlive=true}
     username: username
     password: password
     druid:
@@ -33,8 +39,18 @@ spring:
         login-username: ${DRUID_STAT_USERNAME:admin}
         login-password: ${DRUID_STAT_PASSWORD:admin}
   # Elasticsearch config is optional.
-  # elasticsearch:
-  #   uris: http://localhost:9200
+  elasticsearch:
+    uris: ${ES_URIS:https://0.0.0.0:9200}
+    username: username
+    password: password
+    connection-timeout: 5000
+    socket-timeout: 30000
+    ssl:
+      enabled: true
+      # 测试阶段可以跳过证书验证，生产环境建议使用正式证书
+#      ca-certificate: ${ES_CA_CERTIFICATE:}
+#      ca-fingerprint: ${ES_CA_FINGERPRINT:A17602B312B3DD220B8837906D57B20C1D2B2BCB406465D9529BA90F5BD78F29}
+      trust-all: ${ES_TRUST_ALL:true}
 
 mybatis-plus:
   configuration:
@@ -46,9 +62,67 @@ mybatis-plus:
 
 # LangChain4j LLM config
 easychat:
+  auth:
+    enabled: ${AUTH_ENABLED:false}
+    introspection-url: ${AUTH_INTROSPECTION_URL:}
+  distributed:
+    enabled: ${DISTRIBUTED_ENABLED:false}
+  events:
+    enabled: ${EVENTS_ENABLED:true}
+    outbox:
+      enabled: ${OUTBOX_ENABLED:false}
+  router:
+    strategy: ${ROUTER_STRATEGY:priority}
+  ocr:
+    url: ${OCR_URL:}
+    token: ${OCR_TOKEN:}
+  media:
+    transcription-url: ${TRANSCRIPTION_URL:}
+    token: ${TRANSCRIPTION_TOKEN:}
+    ffmpeg: ${FFMPEG_PATH:ffmpeg}
   llm:
-    api-key: ${OPENAI_API_KEY:xxxxxxxxxxxxxxx}
+    allow-default-model: ${ALLOW_DEFAULT_MODEL:false}
+    api-key: ${OPENAI_API_KEY:xxxxxxxxxxxxxx}
     base-url: ${OPENAI_BASE_URL:https://api.deepseek.com/v1}
     model-name: ${OPENAI_MODEL:deepseek-chat}
     temperature: 0.7
     max-tokens: 2000
+  memory:
+    summary-enabled: ${SUMMARY_ENABLED:true}
+    summary-model: ${SUMMARY_MODEL:}
+    summary-keep-messages: 4
+    summary-threshold: 10
+    summary-max-messages: 40
+  rag:
+    rerank:
+      url: ${RERANK_URL:}
+      token: ${RERANK_TOKEN:}
+    storage:
+      mode: ${STORAGE_MODE:local}
+      s3:
+        endpoint: ${S3_ENDPOINT:}
+        bucket: ${S3_BUCKET:}
+        region: ${S3_REGION:us-east-1}
+        access-key: ${S3_ACCESS_KEY:}
+        secret-key: ${S3_SECRET_KEY:}
+    mode: ${RAG_MODE:bm25}
+    analyzer: ${RAG_ANALYZER:standard}
+    max-context-chars: 6000
+    index: easychat_kb
+    top-k: 3
+    storage-dir: ./data/knowledge
+    chunk:
+      size: 512        # token 目标值，字符近似切分
+      overlap: 80      # 字符近似值
+    embedding:
+      dimensions: ${EMBEDDING_DIMENSIONS:1024}
+      base-url: ${EMBEDDING_BASE_URL:https://api.siliconflow.cn/v1}
+      api-key: ${EMBEDDING_API_KEY:}
+      model-name: ${EMBEDDING_MODEL:BAAI/bge-m3}
+      batch-size: 16
+    hybrid:
+      bm25-size: 20
+      knn-size: 20
+  es:
+    enabled: ${ES_ENABLED:true}
+    index: easychat

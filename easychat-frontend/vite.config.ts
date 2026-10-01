@@ -15,6 +15,8 @@ export default defineConfig({
         target: 'http://localhost:8080',
         changeOrigin: true,
       },
+      '/model': { target: 'http://localhost:8080', changeOrigin: true },
+      '/es': { target: 'http://localhost:8080', changeOrigin: true },
     },
   },
 })

@@ -1,12 +1,8 @@
 package com.easychat.core.router;
 
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.easychat.infra.mysql.entity.ModelDO;
-import com.easychat.infra.mysql.entity.ModelProviderDO;
-import com.easychat.infra.mysql.entity.ProviderDO;
-import com.easychat.infra.mysql.mapper.ModelMapper;
-import com.easychat.infra.mysql.mapper.ModelProviderMapper;
-import com.easychat.infra.mysql.mapper.ProviderMapper;
+import com.easychat.common.domain.model.ModelDefinition;
+import com.easychat.common.domain.model.ModelRoute;
+import com.easychat.common.domain.model.ProviderAccount;
 import com.easychat.llm.provider.OpenAICompatibleProvider;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
@@ -29,9 +25,9 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class ProviderRegistry {
 
-    private final ModelProviderMapper modelProviderMapper;
-    private final ProviderMapper providerMapper;
-    private final ModelMapper modelMapper;
+    private final com.easychat.infra.mysql.repository.RouteCatalog catalog;
+    @org.springframework.beans.factory.annotation.Autowired private List<com.easychat.llm.provider.ProviderFactory> factories;
+    @org.springframework.beans.factory.annotation.Autowired private org.springframework.core.env.Environment environment;
 
     /** model_code → sorted ProviderWrapper list */
     private volatile Map<String, List<ProviderWrapper>> cache = new ConcurrentHashMap<>();
@@ -42,30 +38,27 @@ public class ProviderRegistry {
     }
 
     @Scheduled(fixedDelay = 5 * 60 * 1000)
-    public void reload() {
+    public synchronized void reload() {
         try {
-            Map<String, ProviderDO> providerMap = providerMapper
-                    .selectList(new LambdaQueryWrapper<ProviderDO>().eq(ProviderDO::getEnabled, 1))
+            Map<String, ProviderAccount> providerMap = catalog.providers()
                     .stream()
-                    .collect(Collectors.toMap(ProviderDO::getProviderCode, p -> p));
+                    .collect(Collectors.toMap(ProviderAccount::getProviderCode, p -> p));
 
-            List<ModelProviderDO> configs = modelProviderMapper
-                    .selectList(new LambdaQueryWrapper<ModelProviderDO>().eq(ModelProviderDO::getEnabled, 1));
+            List<ModelRoute> configs = catalog.routes();
 
-            Map<String, ModelDO> modelMap = modelMapper
-                    .selectList(new LambdaQueryWrapper<ModelDO>().eq(ModelDO::getEnabled, 1))
+            Map<String, ModelDefinition> modelMap = catalog.models()
                     .stream()
-                    .collect(Collectors.toMap(ModelDO::getModelCode, m -> m));
+                    .collect(Collectors.toMap(ModelDefinition::getModelCode, m -> m));
 
             Map<String, List<ProviderWrapper>> newCache = configs.stream()
                     .filter(cfg -> providerMap.containsKey(cfg.getProviderCode()))
                     .filter(cfg -> modelMap.containsKey(cfg.getModelCode()))
                     .collect(Collectors.groupingBy(
-                            ModelProviderDO::getModelCode,
+                            ModelRoute::getModelCode,
                             Collectors.collectingAndThen(
                                     Collectors.toList(),
                                     list -> list.stream()
-                                            .sorted((a, b) -> Integer.compare(a.getPriority(), b.getPriority()))
+                                            .sorted(java.util.Comparator.comparingInt(a -> a.getPriority() == null ? 0 : a.getPriority()))
                                             .map(cfg -> buildWrapper(
                                                     cfg,
                                                     providerMap.get(cfg.getProviderCode()),
@@ -77,6 +70,7 @@ public class ProviderRegistry {
             cache = new ConcurrentHashMap<>(newCache);
             log.info("ProviderRegistry reloaded: {} model(s) configured", cache.size());
         } catch (Exception e) {
+            cache = new ConcurrentHashMap<>();
             log.error("ProviderRegistry reload failed", e);
         }
     }
@@ -85,26 +79,45 @@ public class ProviderRegistry {
         return cache.getOrDefault(modelCode, Collections.emptyList());
     }
 
-    private ProviderWrapper buildWrapper(ModelProviderDO cfg, ProviderDO provider, ModelDO model) {
-        var llmProvider = new OpenAICompatibleProvider(
-                cfg.getProviderCode(),
-                provider.getApiKey(),
-                provider.getBaseUrl(),
-                cfg.getModelCode(),
-                toDouble(model.getDefaultTemperature()),
-                toDouble(model.getDefaultTopP()),
-                model.getMaxOutputTokens(),
-                cfg.getTimeoutMs() != null ? cfg.getTimeoutMs() : 60_000
-        );
-        return new ProviderWrapper(
+    public boolean isModelEnabled(String code) {
+        return catalog.enabled(code);
+    }
+
+    private ProviderWrapper buildWrapper(ModelRoute cfg, ProviderAccount provider, ModelDefinition model) {
+        String protocol=environment.getProperty("easychat.providers.protocols."+provider.getProviderCode(),"openai-compatible");
+        var matches=factories.stream().filter(f -> f.protocol().equals(protocol)).toList();
+        if(matches.size()!=1) throw new IllegalArgumentException("Expected exactly one provider factory for protocol: "+protocol);
+        var llmProvider=matches.get(0).create(provider,model,cfg);
+        ProviderWrapper wrapper = new ProviderWrapper(
                 llmProvider,
                 cfg.getPriority() != null ? cfg.getPriority() : 0,
                 cfg.getWeight() != null ? cfg.getWeight() : 1,
                 3,
-                30
+                30,
+                cfg.getMaxRetry() == null ? 0 : cfg.getMaxRetry()
         );
+        wrapper.setVision(environment.getProperty("easychat.providers.capabilities."+provider.getProviderCode()+".vision",Boolean.class,Integer.valueOf(1).equals(model.getSupportVision())));
+        wrapper.setVisionTools(environment.getProperty("easychat.providers.capabilities."+provider.getProviderCode()+".vision-tools",Boolean.class,true));
+        cache.getOrDefault(cfg.getModelCode(), List.of()).stream()
+            .filter(old -> old.getProvider().getProviderCode().equals(cfg.getProviderCode()))
+            .findFirst().ifPresent(wrapper::inheritState);
+        return wrapper;
     }
 
+    public Map<String,List<Map<String,Object>>> diagnostics() {
+        return cache.entrySet().stream().collect(Collectors.toMap(Map.Entry::getKey,e->e.getValue().stream().map(ProviderWrapper::diagnostics).toList()));
+    }
+    @Scheduled(fixedDelay=30000) public void persistCircuitSnapshots() {
+        var routes=cache.values().stream().flatMap(List::stream).collect(Collectors.groupingBy(r->r.getProvider().getProviderCode()));
+        routes.forEach((code,entries)->{
+            try {
+                int failures=entries.stream().mapToInt(r->r.getFailCount().get()).max().orElse(0);
+                String status=entries.stream().anyMatch(r->"OPEN".equals(r.getCircuitStatus()))?"OPEN":entries.stream().anyMatch(r->"HALF_OPEN".equals(r.getCircuitStatus()))?"HALF_OPEN":"CLOSED";
+                long last=entries.stream().mapToLong(ProviderWrapper::getLastFailTimeMs).max().orElse(0);
+                catalog.snapshot(code,failures,status,last==0?null:java.time.LocalDateTime.ofInstant(java.time.Instant.ofEpochMilli(last),java.time.ZoneId.systemDefault()));
+            }catch(Exception e){log.warn("Circuit snapshot persistence failed for {}",code);}
+        });
+    }
     private Double toDouble(java.math.BigDecimal value) {
         return value != null ? value.doubleValue() : null;
     }

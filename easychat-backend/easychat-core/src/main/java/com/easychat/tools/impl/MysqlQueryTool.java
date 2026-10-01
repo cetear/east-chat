@@ -1,39 +1,18 @@
 package com.easychat.tools.impl;
-
-import com.easychat.infra.mysql.mapper.ChatMessageMapper;
-import com.easychat.tools.Tool;
-import lombok.extern.slf4j.Slf4j;
+import com.easychat.common.domain.chat.ChatMessage;
+import com.easychat.common.port.ChatMessageRepository;
+import com.easychat.tools.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
-
 import java.util.Map;
-
-@Slf4j
 @Component
 public class MysqlQueryTool implements Tool {
-
-    @Autowired
-    private ChatMessageMapper chatMessageMapper;
-
-    @Override
-    public String name() {
-        return "mysql_query";
-    }
-
-    @Override
-    public String description() {
-        return "Query MySQL database for chat messages";
-    }
-
-    @Override
-    public String execute(Map<String, Object> args) {
-        try {
-            Long sessionId = Long.valueOf(args.get("sessionId").toString());
-            long count = chatMessageMapper.selectCount(null);
-            return "Total messages: " + count;
-        } catch (Exception e) {
-            log.error("MySQL query failed", e);
-            return "Error: " + e.getMessage();
-        }
+    @Autowired private ChatMessageRepository messages;
+    public String name() { return "mysql_query"; }
+    public String description() { return "Count successful messages in the current session. No arguments."; }
+    public String execute(Map<String,Object> args) { throw new IllegalArgumentException("Trusted session context required"); }
+    public String execute(Map<String,Object> args,ToolContext context) {
+        if (context==null || context.sessionId()==null) throw new IllegalArgumentException("Session required");
+        return "Total messages: " + messages.countSuccessful(context.sessionId());
     }
 }

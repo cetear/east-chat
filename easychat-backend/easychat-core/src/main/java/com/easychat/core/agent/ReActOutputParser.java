@@ -6,13 +6,13 @@ import java.util.regex.Pattern;
 public class ReActOutputParser {
 
     private static final Pattern THOUGHT_PATTERN = Pattern.compile(
-        "Thought:\\s*(.+?)(?=\\n(?:Action:|Final Answer:)|$)", Pattern.DOTALL);
+            "Thought:\\s*(.+?)(?=\\n(?:Action:|Final Answer:)|$)", Pattern.DOTALL);
     private static final Pattern ACTION_PATTERN = Pattern.compile(
-        "Action:\\s*(.+?)(?=\\n|$)");
+            "Action:\\s*(.+?)(?=\\n|$)");
     private static final Pattern ACTION_INPUT_PATTERN = Pattern.compile(
-        "Action Input:\\s*(.+?)(?=\\n(?:Thought:|Observation:|$))", Pattern.DOTALL);
+            "Action Input:\\s*(.+?)(?=\\n(?:Thought:|Observation:|Final Answer:)|\\z)", Pattern.DOTALL);
     private static final Pattern FINAL_ANSWER_PATTERN = Pattern.compile(
-        "Final Answer:\\s*(.+)", Pattern.DOTALL);
+            "Final Answer:\\s*(.+)", Pattern.DOTALL);
 
     public static ReActStep parse(String llmOutput) {
         ReActStep step = new ReActStep();

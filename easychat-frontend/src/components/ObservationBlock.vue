@@ -4,12 +4,16 @@
       <span class="obs-icon">&#x1F4CB;</span>
       <span class="obs-label">Observation</span>
     </div>
-    <pre class="obs-content">{{ content }}</pre>
+    <pre class="obs-content">{{ displayContent }}</pre>
   </div>
 </template>
 
 <script setup lang="ts">
-defineProps<{ content: string }>()
+import { computed } from 'vue'
+const props = defineProps<{ content: string }>()
+const displayContent = computed(() => {
+  try { return JSON.stringify(JSON.parse(props.content), null, 2) } catch { return props.content }
+})
 </script>
 
 <style scoped>

@@ -12,14 +12,19 @@
       />
       <ObservationBlock v-else-if="eventType === 'observation'" :content="message.content" />
 
+      <div v-else-if="message.role === 'user'" class="message-text plain-text">{{ message.content }}</div>
       <div v-else class="message-text" v-html="renderedContent"></div>
+      <img v-for="(src, index) in images" :key="index" :src="src" alt="消息附件" class="attachment-image" referrerpolicy="no-referrer" />
+      <p v-if="notice" class="message-status" role="status">{{ notice }}</p>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import { marked } from 'marked'
+import { renderMarkdown } from '@/utils/markdown'
+import { messageNotice } from '@/utils/chatPresentation'
+import { validImage } from '@/utils/validation'
 import ThoughtBlock from './ThoughtBlock.vue'
 import ToolCard from './ToolCard.vue'
 import ObservationBlock from './ObservationBlock.vue'
@@ -28,6 +33,8 @@ import type { ChatMessage as PlainChatMessage, StreamEventMessage } from '@/type
 const props = defineProps<{
   message: PlainChatMessage | StreamEventMessage
 }>()
+
+const notice = computed(() => 'type' in props.message ? '' : messageNotice(props.message))
 
 const eventType = computed(() => {
   return 'type' in props.message ? props.message.type : null
@@ -49,14 +56,25 @@ const renderedContent = computed(() => {
   if (!props.message.content) return ''
   if (props.message.role === 'user') return props.message.content
   try {
-    return marked.parse(props.message.content, { breaks: true })
+    return renderMarkdown(props.message.content)
   } catch {
-    return props.message.content
+    return ''
   }
+})
+const images = computed<string[]>(() => {
+  if ('type' in props.message) return []
+  let values = props.message.images
+  if (!values && props.message.paramJson) {
+    try { values = JSON.parse(props.message.paramJson).images } catch { return [] }
+  }
+  return Array.isArray(values) ? values.filter(value => typeof value === 'string' && validImage(value)) : []
 })
 </script>
 
 <style scoped>
+.plain-text { white-space: pre-wrap; }
+.attachment-image { display: block; max-width: 280px; max-height: 240px; margin-top: 8px; }
+.message-status { font-size: 12px; opacity: .8; margin-top: 8px; }
 .chat-message {
   margin: 10px 0;
   display: flex;

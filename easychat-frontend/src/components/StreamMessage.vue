@@ -1,6 +1,7 @@
 <template>
   <div class="stream-message">
-    <!-- Agent reasoning events -->
+    <details v-if="streamingEvents.length" class="execution-details">
+      <summary>查看工具执行过程</summary>
     <template v-for="(event, index) in streamingEvents" :key="index">
       <ThoughtBlock v-if="event.type === 'thought'" :content="event.content" />
       <ToolCard v-else-if="event.type === 'action'"
@@ -9,6 +10,8 @@
       />
       <ObservationBlock v-else-if="event.type === 'observation'" :content="event.content" />
     </template>
+
+    </details>
 
     <!-- Final answer streaming -->
     <div v-if="content" class="chat-message">
@@ -36,7 +39,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { Loading } from '@element-plus/icons-vue'
-import { marked } from 'marked'
+import { renderMarkdown } from '@/utils/markdown'
 import ThoughtBlock from './ThoughtBlock.vue'
 import ToolCard from './ToolCard.vue'
 import ObservationBlock from './ObservationBlock.vue'
@@ -53,14 +56,16 @@ const props = withDefaults(defineProps<{
 const renderedContent = computed(() => {
   if (!props.content) return ''
   try {
-    return marked.parse(props.content, { breaks: true })
+    return renderMarkdown(props.content)
   } catch {
-    return props.content
+    return ''
   }
 })
 </script>
 
 <style scoped>
+.execution-details { margin: 8px 0; color: #606266; font-size: 13px; }
+.execution-details summary { cursor: pointer; }
 .stream-message {
   margin: 10px 0;
 }

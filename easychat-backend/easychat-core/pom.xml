@@ -18,6 +18,7 @@
     <description>Core: domain, use cases, agent, routing, LLM client, capabilities</description>
 
     <dependencies>
+        <dependency><groupId>com.fasterxml.jackson.core</groupId><artifactId>jackson-databind</artifactId></dependency>
         <dependency>
             <groupId>com.easychat</groupId>
             <artifactId>easychat-common</artifactId>
@@ -35,6 +36,20 @@
         <dependency>
             <groupId>dev.langchain4j</groupId>
             <artifactId>langchain4j-open-ai</artifactId>
+        </dependency>
+
+        <!-- Document parsing (Apache Tika + PDFBox) -->
+        <dependency>
+            <groupId>org.apache.tika</groupId>
+            <artifactId>tika-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.tika</groupId>
+            <artifactId>tika-parsers-standard-package</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.pdfbox</groupId>
+            <artifactId>pdfbox</artifactId>
         </dependency>
 
         <!-- Reactor Core for Flux -->

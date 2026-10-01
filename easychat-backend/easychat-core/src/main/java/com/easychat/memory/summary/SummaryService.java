@@ -1,13 +1,6 @@
 package com.easychat.memory.summary;
-
+import com.easychat.core.context.ChatExecutionContext;
 public interface SummaryService {
-    /**
-     * 判断是否需要总结
-     */
+    void summarize(ChatExecutionContext context);
     boolean shouldSummarize(Long sessionId, int messageCount);
-
-    /**
-     * 生成会话总结
-     */
-    String generateSummary(Long sessionId);
 }

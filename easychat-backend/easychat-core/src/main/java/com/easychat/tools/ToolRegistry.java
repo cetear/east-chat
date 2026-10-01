@@ -24,7 +24,9 @@ public class ToolRegistry {
     }
 
     public void register(Tool tool) {
-        tools.put(tool.name(), tool);
+        if (tool.name() == null || tool.name().isBlank() || tools.putIfAbsent(tool.name(), tool) != null) {
+            throw new IllegalArgumentException("Invalid or duplicate tool name: " + tool.name());
+        }
         log.info("Registered tool: {}", tool.name());
     }
 

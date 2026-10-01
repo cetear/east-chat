@@ -8,8 +8,7 @@
     <div v-show="expanded" class="rag-list">
       <div v-for="(ref, idx) in references" :key="idx" class="rag-item">
         <div class="rag-title">[{{ idx + 1 }}] {{ ref.title }}</div>
-        <div class="rag-score" v-if="ref.score">Score: {{ ref.score.toFixed(2) }}</div>
-        <div class="rag-text">{{ ref.content }}</div>
+        <div class="rag-text" v-if="ref.pageNo != null">第 {{ ref.pageNo }} 页</div>
       </div>
     </div>
   </div>
@@ -18,9 +17,10 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { ArrowRight } from '@element-plus/icons-vue'
+import type { Source } from '@/types/message'
 
 defineProps<{
-  references: Array<{ title: string; content: string; score?: number }>
+  references: Source[]
 }>()
 
 const expanded = ref(false)

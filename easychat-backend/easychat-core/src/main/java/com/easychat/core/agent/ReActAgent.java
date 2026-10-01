@@ -4,339 +4,127 @@ import com.easychat.core.context.AgentContext;
 import com.easychat.core.context.ChatExecutionContext;
 import com.easychat.core.port.ChatModelClient;
 import com.easychat.llm.client.LLMClient;
-import com.easychat.memory.ConversationMemory;
-import com.easychat.infra.mysql.entity.ChatMessageDO;
-import com.easychat.tools.Tool;
-import com.easychat.tools.ToolRegistry;
-import lombok.extern.slf4j.Slf4j;
+import com.easychat.llm.client.LLMCallOptions;
+import com.easychat.tools.*;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import dev.langchain4j.data.message.*;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
+import reactor.core.scheduler.Schedulers;
 
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
-import java.nio.charset.StandardCharsets;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.stream.Collectors;
+import java.util.*;
+import java.util.concurrent.CancellationException;
 
-@Slf4j
 @Component
 public class ReActAgent implements StreamingAgent {
+    @org.springframework.beans.factory.annotation.Autowired private com.fasterxml.jackson.databind.ObjectMapper json;
 
     @Autowired
-    private LLMClient llmClient;
-
-    @Autowired(required = false)
     private ChatModelClient chatModelClient;
-
     @Autowired
-    private ConversationMemory conversationMemory;
-
-    @Autowired(required = false)
     private ToolRegistry toolRegistry;
 
     @Override
     public AgentResult run(AgentContext context) {
         try {
-            boolean useTools = context.isToolsEnabled()
-                && toolRegistry != null
-                && !toolRegistry.getAllTools().isEmpty();
-
-            if (!useTools) {
-                String prompt = buildPrompt(context);
-                String response = chat(prompt, context);
-                return AgentResult.success(response);
-            }
-
-            return reactRun(context);
+            String response = streamRun(context).filter(e -> e.getType() == AgentEvent.Type.MESSAGE)
+                    .map(AgentEvent::getContent).collectList().map(parts -> String.join("", parts)).block();
+            return AgentResult.success(response);
         } catch (Exception e) {
-            log.error("Agent execution failed", e);
             return AgentResult.error(e.getMessage());
         }
     }
 
-    private AgentResult reactRun(AgentContext context) {
-        String systemPrompt = buildReActPrompt(context);
-        StringBuilder conversation = new StringBuilder(systemPrompt);
-
-        for (int i = 0; i < context.getMaxIterations(); i++) {
-            String llmResponse = chat(conversation.toString(), context);
-            ReActStep step = ReActOutputParser.parse(llmResponse);
-
-            if (step.isFinished()) {
-                return AgentResult.success(step.getFinalAnswer());
-            }
-
-            if (step.hasAction()) {
-                String toolResult;
-                Tool tool = toolRegistry.getTool(step.getAction());
-                if (tool != null) {
-                    try {
-                        toolResult = tool.execute(parseActionInput(step.getActionInput()));
-                    } catch (Exception e) {
-                        toolResult = "Error executing tool: " + e.getMessage();
-                    }
-                } else {
-                    toolResult = "Error: Tool '" + step.getAction() + "' not found. Available tools: "
-                        + toolRegistry.getAllTools().values().stream().map(Tool::name).collect(Collectors.joining(", "));
-                }
-
-                conversation.append("\n").append(llmResponse)
-                    .append("\nObservation: ").append(toolResult).append("\n");
-                continue;
-            }
-
-            return AgentResult.success(step.getFinalAnswer() != null ? step.getFinalAnswer() : llmResponse);
-        }
-
-        return AgentResult.success("I was unable to fully resolve your request within the allowed reasoning steps. Please try simplifying your question.");
-    }
-
     @Override
     public Flux<AgentEvent> streamRun(AgentContext context) {
-        // 判断是否启用工具模式
-        boolean useTools = context.isToolsEnabled()
-            && toolRegistry != null
-            && !toolRegistry.getAllTools().isEmpty();
-
-        if (!useTools) {
-            // 简单流式模式（无工具，退化为纯 LLM 调用）
-            return simpleStreamRun(context);
-        }
-
-        // ReAct 循环模式
-        return reactStreamRun(context);
-    }
-
-    /**
-     * 简单流式：直接将 LLM 输出逐 token 返回
-     */
-    private Flux<AgentEvent> simpleStreamRun(AgentContext context) {
-        try {
-            String prompt = buildPrompt(context);
-            return streamChat(prompt, context).map(AgentEvent::message);
-        } catch (Exception e) {
-            log.error("Simple streaming failed", e);
-            return Flux.error(e);
-        }
-    }
-
-    /**
-     * ReAct 循环流式：Thought → Action → Observation → ... → Final Answer
-     */
-    private Flux<AgentEvent> reactStreamRun(AgentContext context) {
-        return Flux.create(sink -> {
-            try {
-                String systemPrompt = buildReActPrompt(context);
-                StringBuilder conversation = new StringBuilder(systemPrompt);
-
-                for (int i = 0; i < context.getMaxIterations(); i++) {
-                    // 同步调用 LLM 进行推理
-                    String llmResponse = chat(conversation.toString(), context);
-                    ReActStep step = ReActOutputParser.parse(llmResponse);
-
-                    // 发射 Thought 事件
-                    if (step.getThought() != null) {
-                        sink.next(AgentEvent.thought(step.getThought()));
-                    }
-
-                    // 如果有最终答案
-                    if (step.isFinished()) {
-                        // 流式输出最终答案
-                        String finalAnswer = step.getFinalAnswer();
-                        // 逐块发送（模拟流式效果，每 20 个字符一块）
-                        int chunkSize = 20;
-                        for (int j = 0; j < finalAnswer.length(); j += chunkSize) {
-                            String chunk = finalAnswer.substring(j, Math.min(j + chunkSize, finalAnswer.length()));
-                            sink.next(AgentEvent.message(chunk));
+        return Flux.defer(() -> {
+            ChatExecutionContext execution = execution(context);
+            List<ChatMessage> messages = new ArrayList<>(execution.getModelMessages());
+            boolean tools = context.isToolsEnabled();
+            if (!tools) return chatModelClient.streamChat("", execution).map(AgentEvent::message);
+            if (toolRegistry.getAllTools().isEmpty())
+                return Flux.error(new IllegalStateException("No tools available"));
+            messages.add(0, SystemMessage.from(toolPrompt(context.getMaxIterations())));
+            return Flux.<AgentEvent>create(sink -> {
+                try {
+                    for (int round = 0; round < context.getMaxIterations(); round++) {
+                        if (sink.isCancelled() || execution.isCancelled()) return;
+                        int size = messages.stream().mapToInt(ReActAgent::messageSize).sum();
+                        if (size > execution.getMaxContextChars())
+                            throw new IllegalStateException("context_limit: tool reasoning input exceeds budget");
+                        execution.checkLease();
+                        execution.setModelMessages(List.copyOf(messages));
+                        String answer = chatModelClient.chat("", execution);
+                        if (sink.isCancelled() || execution.isCancelled()) return;
+                        ReActStep step = ReActOutputParser.parse(answer);
+                        if (step.isFinished()) {
+                            sink.next(AgentEvent.message(step.getFinalAnswer()));
+                            sink.complete();
+                            return;
                         }
-                        sink.complete();
-                        return;
-                    }
-
-                    // 如果有 Action，执行工具
-                    if (step.hasAction()) {
-                        Map<String, Object> input = parseActionInput(step.getActionInput());
+                        if (!step.hasAction())
+                            throw new IllegalStateException("Invalid ReAct response: expected action or final answer");
+                        Map<String, Object> input;
+                        String observation;
+                        try {
+                            input = json.readValue(step.getActionInput() == null ? "{}" : step.getActionInput(),
+                                    new TypeReference<Map<String, Object>>() {
+                                    });
+                            if (input == null) throw new IllegalArgumentException("Tool input must be an object");
+                        } catch (Exception e) {
+                            messages.add(AiMessage.from(answer));
+                            messages.add(UserMessage.from("Observation: invalid tool JSON input"));
+                            sink.next(AgentEvent.observation("{\"success\":false,\"error\":\"invalid tool JSON input\"}"));
+                            continue;
+                        }
                         sink.next(AgentEvent.action(step.getAction(), input));
-
-                        // 执行工具
-                        String toolResult;
-                        Tool tool = toolRegistry.getTool(step.getAction());
-                        if (tool != null) {
-                            try {
-                                toolResult = tool.execute(input);
-                            } catch (Exception e) {
-                                toolResult = "Error executing tool: " + e.getMessage();
-                            }
-                        } else {
-                            toolResult = "Error: Tool '" + step.getAction() + "' not found. Available tools: "
-                                + toolRegistry.getAllTools().values().stream().map(Tool::name).collect(Collectors.joining(", "));
+                        if (sink.isCancelled() || execution.isCancelled()) return;
+                        try {
+                            execution.checkLease();
+                            Tool tool = toolRegistry.getTool(step.getAction());
+                            if (tool == null) throw new IllegalArgumentException("Unknown tool: " + step.getAction());
+                            String result = tool.execute(input, new ToolContext(context.getSessionId(), execution.getDataset(), execution.getUserId()));
+                            observation = json.writeValueAsString(Map.of("success", true, "result", result == null ? "" : result));
+                        } catch (Exception e) {
+                            observation = json.writeValueAsString(Map.of("success", false, "error",
+                                    Objects.toString(e.getMessage(), "Tool failed")));
                         }
-
-                        sink.next(AgentEvent.observation(toolResult));
-
-                        // 追加到对话历史
-                        conversation.append("\n").append(llmResponse)
-                            .append("\nObservation: ").append(toolResult).append("\n");
+                        if (sink.isCancelled() || execution.isCancelled()) return;
+                        sink.next(AgentEvent.observation(observation));
+                        messages.add(AiMessage.from(answer));
+                        messages.add(UserMessage.from("Observation: " + observation));
                     }
+                    sink.error(new IllegalStateException("max_iterations: tool reasoning limit reached"));
+                } catch (Exception e) {
+                    if (!sink.isCancelled()) sink.error(e);
                 }
-
-                // 达到最大迭代次数
-                sink.next(AgentEvent.thought("Maximum reasoning steps reached. Providing best available answer."));
-                sink.next(AgentEvent.message("I was unable to fully resolve your request within the allowed reasoning steps. Please try simplifying your question."));
-                sink.complete();
-
-            } catch (Exception e) {
-                log.error("ReAct streaming failed", e);
-                sink.error(e);
-            }
+            }).subscribeOn(Schedulers.boundedElastic());
         });
     }
 
-    /**
-     * 构建简单对话 prompt
-     */
-    private String buildPrompt(AgentContext context) {
-        StringBuilder prompt = new StringBuilder();
-
-        appendMemoryAndContext(prompt, context);
-
-        List<ChatMessageDO> history = conversationMemory.getRecentMessages(
-            context.getSessionId(), 10);
-
-        if (!history.isEmpty()) {
-            prompt.append("Previous conversation:\n");
-            for (ChatMessageDO msg : history) {
-                prompt.append(msg.getRole()).append(": ").append(msg.getContent()).append("\n");
-            }
-            prompt.append("\n");
-        }
-
-        prompt.append("User: ").append(context.getUserMessage()).append("\n");
-        prompt.append("Assistant: ");
-
-        return prompt.toString();
-    }
-
-    private void appendMemoryAndContext(StringBuilder prompt, AgentContext context) {
-        String summary = conversationMemory.getSummary(context.getSessionId());
-        if (summary != null && !summary.isBlank()) {
-            prompt.append("[Conversation summary]\n").append(summary).append("\n\n");
-        }
-
-        Object retrieved = context.getVariable("retrievedContext");
-        if (retrieved != null && !retrieved.toString().isBlank()) {
-            prompt.append("[Reference information]\n").append(retrieved).append("\n\n");
-        }
-    }
-
-    private String chat(String prompt, AgentContext context) {
-        ChatExecutionContext executionContext = getExecutionContext(context);
-        if (chatModelClient != null && executionContext != null) {
-            return chatModelClient.chat(prompt, executionContext);
-        }
-        return llmClient.chat(prompt);
-    }
-
-    private Flux<String> streamChat(String prompt, AgentContext context) {
-        ChatExecutionContext executionContext = getExecutionContext(context);
-        if (chatModelClient != null && executionContext != null) {
-            return chatModelClient.streamChat(prompt, executionContext);
-        }
-        return llmClient.streamChat(prompt);
-    }
-
-    private ChatExecutionContext getExecutionContext(AgentContext context) {
+    private ChatExecutionContext execution(AgentContext context) {
         Object value = context.getVariable("chatExecutionContext");
-        return value instanceof ChatExecutionContext executionContext ? executionContext : null;
+        if (!(value instanceof ChatExecutionContext execution))
+            throw new IllegalArgumentException("Chat execution context is required");
+        if (execution.isCancelled()) throw new CancellationException();
+        return execution;
     }
 
-    /**
-     * 构建 ReAct 系统 prompt
-     */
-    private String buildReActPrompt(AgentContext context) {
-        StringBuilder prompt = new StringBuilder();
-
-        // 加载系统提示词模板
-        String template = loadPromptTemplate();
-
-        // 构建工具描述
-        StringBuilder toolsDesc = new StringBuilder();
-        for (Tool tool : toolRegistry.getAllTools().values()) {
-            toolsDesc.append("- ").append(tool.name()).append(": ").append(tool.description()).append("\n");
-        }
-
-        // 替换模板变量
-        String systemPrompt = template
-            .replace("{{tools}}", toolsDesc.toString())
-            .replace("{{maxIterations}}", String.valueOf(context.getMaxIterations()));
-
-        prompt.append(systemPrompt).append("\n\n");
-
-        appendMemoryAndContext(prompt, context);
-
-        // 加载历史消息
-        List<ChatMessageDO> history = conversationMemory.getRecentMessages(
-            context.getSessionId(), 10);
-
-        if (!history.isEmpty()) {
-            prompt.append("Previous conversation:\n");
-            for (ChatMessageDO msg : history) {
-                prompt.append(msg.getRole()).append(": ").append(msg.getContent()).append("\n");
-            }
-            prompt.append("\n");
-        }
-
-        prompt.append("User: ").append(context.getUserMessage()).append("\n");
-
-        return prompt.toString();
+    private static int messageSize(ChatMessage message) {
+        if (message instanceof UserMessage u)
+            return u.contents().stream().mapToInt(c -> c instanceof TextContent t ? t.text().length() : 4096).sum();
+        if (message instanceof AiMessage a) return a.text() == null ? 0 : a.text().length();
+        if (message instanceof SystemMessage s) return s.text().length();
+        return message.toString().length();
     }
 
-    private String loadPromptTemplate() {
-        try {
-            ClassPathResource resource = new ClassPathResource("prompts/react-system.txt");
-            try (BufferedReader reader = new BufferedReader(
-                    new InputStreamReader(resource.getInputStream(), StandardCharsets.UTF_8))) {
-                return reader.lines().collect(Collectors.joining("\n"));
-            }
-        } catch (Exception e) {
-            log.warn("Failed to load ReAct prompt template, using default", e);
-            return "You are a helpful AI assistant that can use tools.\n"
-                + "Available tools:\n{{tools}}\n"
-                + "Use Thought/Action/Action Input/Observation format.\n"
-                + "When done, use Final Answer: <answer>";
-        }
-    }
-
-    private Map<String, Object> parseActionInput(String actionInput) {
-        Map<String, Object> result = new HashMap<>();
-        if (actionInput == null || actionInput.isBlank()) {
-            return result;
-        }
-
-        String trimmed = actionInput.trim();
-
-        // 尝试简单 JSON 解析
-        if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
-            String inner = trimmed.substring(1, trimmed.length() - 1).trim();
-            // 简单的 key:value 解析
-            String[] pairs = inner.split(",");
-            for (String pair : pairs) {
-                int colonIdx = pair.indexOf(':');
-                if (colonIdx > 0) {
-                    String key = pair.substring(0, colonIdx).trim().replace("\"", "");
-                    String value = pair.substring(colonIdx + 1).trim().replace("\"", "");
-                    result.put(key, value);
-                }
-            }
-        } else {
-            // 不是 JSON 格式，作为 query 参数
-            result.put("query", trimmed);
-        }
-
-        return result;
+    private String toolPrompt(int limit) {
+        StringBuilder text = new StringBuilder("Use tools only when needed. Respond with Action: name\nAction Input: JSON object, "
+                + "or Final Answer: answer. Wait for a real Observation; never invent tool results. Limit: " + limit + "\nTools:\n");
+        toolRegistry.getAllTools().values().forEach(tool -> text.append(tool.name()).append(": ")
+                .append(tool.description()).append(" Parameters: ").append(tool.parameters()).append("\n"));
+        return text.toString();
     }
 }

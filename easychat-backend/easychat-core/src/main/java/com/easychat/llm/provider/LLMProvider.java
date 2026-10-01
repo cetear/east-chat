@@ -10,6 +10,7 @@ public interface LLMProvider extends LLMClient {
 
     /** 渠道标识，对应 provider.provider_code */
     String getProviderCode();
+    default boolean supportsRemoteImages() {return true;}
 
     /** 健康检查（可扩展为主动探测） */
     default boolean isHealthy() {

@@ -25,7 +25,7 @@
             <span class="title-text">{{ session.title || 'New Chat' }}</span>
           </div>
           <div class="session-meta">
-            <span class="session-model">{{ getModelName(session.modelCode) }}</span>
+            <span class="session-model">{{ session.status === 1 ? '开启' : '已关闭' }}</span>
             <span class="session-time">{{ formatTime(session.updatedAt) }}</span>
           </div>
         </div>
@@ -96,7 +96,7 @@
       <template #footer>
         <span class="dialog-footer">
           <el-button @click="renameDialogVisible = false">取消</el-button>
-          <el-button type="primary" :disabled="!renameTitle.trim()" @click="confirmRename">
+          <el-button type="primary" @click="confirmRename">
             确定
           </el-button>
         </span>
@@ -109,12 +109,10 @@
 import { computed, nextTick, onBeforeUnmount, ref } from 'vue'
 import { ChatRound, Delete, Edit, MoreFilled, Plus } from '@element-plus/icons-vue'
 import type { SessionView } from '@/types/message'
-import type { ModelOption } from '@/types/model'
 
 const props = defineProps<{
   activeSessionId: string | null
   sessions: SessionView[]
-  modelOptions: ModelOption[]
 }>()
 
 const emit = defineEmits<{
@@ -139,10 +137,6 @@ const paginatedSessions = computed(() => {
   return props.sessions.slice(start, start + pageSize.value)
 })
 
-function getModelName(modelCode: string): string {
-  return props.modelOptions.find(item => item.code === modelCode)?.name || modelCode
-}
-
 function handleSessionClick(sessionId: string): void {
   hideContextMenu()
   emit('session-click', sessionId)
@@ -151,16 +145,7 @@ function handleSessionClick(sessionId: string): void {
 function formatTime(timestamp: string): string {
   if (!timestamp) return ''
 
-  const date = new Date(timestamp)
-  const now = new Date()
-  const diff = now.getTime() - date.getTime()
-
-  if (diff < 60_000) return '刚刚'
-  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)} 分钟前`
-  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)} 小时前`
-  if (diff < 604_800_000) return `${Math.floor(diff / 86_400_000)} 天前`
-
-  return date.toLocaleDateString()
+  return timestamp.replace('T', ' ').slice(0, 16)
 }
 
 function showContextMenu(event: MouseEvent, session: SessionView): void {
@@ -187,7 +172,7 @@ function renameSession(session: SessionView): void {
 }
 
 function confirmRename(): void {
-  if (!selectedSession.value || !renameTitle.value.trim()) return
+  if (!selectedSession.value) return
 
   emit('update-session', {
     ...selectedSession.value,

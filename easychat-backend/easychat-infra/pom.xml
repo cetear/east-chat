@@ -18,6 +18,7 @@
     <description>Infrastructure layer: MySQL, Elasticsearch</description>
 
     <dependencies>
+        <dependency><groupId>com.alibaba</groupId><artifactId>druid-spring-boot-starter</artifactId></dependency>
         <!-- Internal Dependencies -->
         <dependency>
             <groupId>com.easychat</groupId>
@@ -36,12 +37,7 @@
             <artifactId>mysql-connector-j</artifactId>
         </dependency>
 
-        <!-- H2 Database (for testing) -->
-        <dependency>
-            <groupId>com.h2database</groupId>
-            <artifactId>h2</artifactId>
-            <scope>runtime</scope>
-        </dependency>
+
 
         <!-- Elasticsearch -->
         <dependency>

@@ -18,11 +18,7 @@
     <description>Common utilities, constants, and exceptions</description>
 
     <dependencies>
-        <!-- Spring Web (for SseEmitter) -->
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-web</artifactId>
-        </dependency>
+        <dependency><groupId>com.baomidou</groupId><artifactId>mybatis-plus-annotation</artifactId><version>${mybatis-plus.version}</version></dependency>
 
         <!-- Lombok -->
         <dependency>

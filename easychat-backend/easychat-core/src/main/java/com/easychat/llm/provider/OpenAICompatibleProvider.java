@@ -35,8 +35,6 @@ public class OpenAICompatibleProvider implements LLMProvider {
     private final Double topP;
     private final Integer maxTokens;
     private final Duration timeout;
-    private final ChatLanguageModel chatModel;
-    private final StreamingChatLanguageModel streamingModel;
 
     public OpenAICompatibleProvider(String providerCode,
                                     String apiKey,
@@ -55,8 +53,7 @@ public class OpenAICompatibleProvider implements LLMProvider {
         this.maxTokens = maxTokens;
         this.timeout = Duration.ofMillis(timeoutMs > 0 ? timeoutMs : 60_000);
 
-        this.chatModel = buildChatModel(null);
-        this.streamingModel = buildStreamingModel(null);
+
     }
 
     @Override
@@ -64,108 +61,27 @@ public class OpenAICompatibleProvider implements LLMProvider {
         return providerCode;
     }
 
-    @Override
-    public String chat(String prompt) {
-        return chatModel.generate(prompt);
+    @Override public String chatMessages(List<ChatMessage> messages, LLMCallOptions options) {
+        var response=buildChatModel(options).generate(messages); reportUsage(options,response); return response.content().text();
     }
 
-    @Override
-    public String chat(String prompt, LLMCallOptions options) {
-        return buildChatModel(options).generate(prompt);
-    }
-
-    @Override
-    public String chat(String prompt, LLMCallOptions options, List<String> images) {
-        ChatLanguageModel model = buildChatModel(options);
-        if (images == null || images.isEmpty()) {
-            return model.generate(prompt);
-        }
-        return model.generate(toMessages(prompt, images)).content().text();
-    }
-
-    @Override
-    public Flux<String> streamChat(String prompt) {
-        return Flux.create(sink -> streamingModel.generate(prompt, new StreamingResponseHandler<AiMessage>() {
-            @Override
-            public void onNext(String token) {
-                sink.next(token);
-            }
-
-            @Override
-            public void onComplete(Response<AiMessage> response) {
-                sink.complete();
-            }
-
-            @Override
-            public void onError(Throwable error) {
-                log.warn("[{}] Streaming error: {}", providerCode, error.getMessage());
-                sink.error(error);
-            }
+    @Override public Flux<String> streamMessages(List<ChatMessage> messages, LLMCallOptions options) {
+        return Flux.create(sink -> buildStreamingModel(options).generate(messages, new StreamingResponseHandler<AiMessage>() {
+            public void onNext(String token) { if (!sink.isCancelled()) sink.next(token); }
+            public void onComplete(Response<AiMessage> response) { if (!sink.isCancelled()) { reportUsage(options,response); sink.complete(); } }
+            public void onError(Throwable error) { if (!sink.isCancelled()) sink.error(error); }
         }));
     }
 
-    @Override
-    public Flux<String> streamChat(String prompt, LLMCallOptions options) {
-        StreamingChatLanguageModel model = buildStreamingModel(options);
-        return Flux.create(sink -> model.generate(prompt, new StreamingResponseHandler<AiMessage>() {
-            @Override
-            public void onNext(String token) {
-                sink.next(token);
-            }
-
-            @Override
-            public void onComplete(Response<AiMessage> response) {
-                sink.complete();
-            }
-
-            @Override
-            public void onError(Throwable error) {
-                log.warn("[{}] Streaming error: {}", providerCode, error.getMessage());
-                sink.error(error);
-            }
-        }));
+    private void reportUsage(LLMCallOptions options, Response<AiMessage> response) {
+        if(options==null) return;
+        var usage=response.tokenUsage();
+        options.getUsageConsumer().accept(new com.easychat.llm.client.ModelUsage(usage==null?null:usage.inputTokenCount(),
+            usage==null?null:usage.outputTokenCount(),usage==null?null:usage.totalTokenCount(),
+            response.finishReason()==null?null:response.finishReason().name()));
     }
-
-    @Override
-    public Flux<String> streamChat(String prompt, LLMCallOptions options, List<String> images) {
-        StreamingChatLanguageModel model = buildStreamingModel(options);
-        return Flux.create(sink -> {
-            StreamingResponseHandler<AiMessage> handler = new StreamingResponseHandler<AiMessage>() {
-                @Override
-                public void onNext(String token) {
-                    sink.next(token);
-                }
-
-                @Override
-                public void onComplete(Response<AiMessage> response) {
-                    sink.complete();
-                }
-
-                @Override
-                public void onError(Throwable error) {
-                    log.warn("[{}] Streaming error: {}", providerCode, error.getMessage());
-                    sink.error(error);
-                }
-            };
-            if (images == null || images.isEmpty()) {
-                model.generate(prompt, handler);
-            } else {
-                model.generate(toMessages(prompt, images), handler);
-            }
-        });
-    }
-
-    private List<ChatMessage> toMessages(String prompt, List<String> images) {
-        List<Content> contents = new ArrayList<>();
-        contents.add(TextContent.from(prompt));
-        for (String image : images) {
-            contents.add(ImageContent.from(image));
-        }
-        return List.of(new UserMessage(contents));
-    }
-
     private ChatLanguageModel buildChatModel(LLMCallOptions options) {
-        return OpenAiChatModel.builder()
+        return OpenAiChatModel.builder().maxRetries(0)
                 .apiKey(apiKey)
                 .baseUrl(baseUrl)
                 .modelName(resolveModelName(options))

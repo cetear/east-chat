@@ -1,227 +1,92 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
-import * as chatApi from '@/api/chat'
-import type { ChatMessage, ChatSession, SessionView, StreamEventMessage } from '@/types/message'
-
-function sortSessions(sessions: SessionView[]): SessionView[] {
-  return [...sessions].sort(
-    (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
-  )
-}
-
+import * as api from '@/api/chat'
+import type { ChatMessage, SessionUpdate, SessionView, StreamEventMessage } from '@/types/message'
+const sort = (items: SessionView[]) => [...items].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
 export const useChatStore = defineStore('chat', () => {
   const sessions = ref<SessionView[]>([])
   const messagesBySession = ref<Record<string, ChatMessage[]>>({})
+  const historyErrors = ref<Record<string, string>>({})
   const activeSessionId = ref<string | null>(null)
-  const pendingSessionTitle = ref('')
-  const draftMessages = ref<ChatMessage[]>([])
   const isStreaming = ref(false)
   const streamContent = ref('')
   const streamingEvents = ref<StreamEventMessage[]>([])
-  const streamingSessionId = ref<string | null>(null)
-  let latestSwitchRequestId = 0
-
-  const activeSession = computed<ChatSession | null>(() => {
-    const session = sessions.value.find(item => item.sessionCode === activeSessionId.value)
-    if (!session) return null
-
-    return {
-      ...session,
-      messages: messagesBySession.value[session.sessionCode] ?? [],
-    }
-  })
-
-  const currentMessages = computed<ChatMessage[]>(() => {
-    if (!activeSessionId.value) return []
-    return messagesBySession.value[activeSessionId.value] ?? []
-  })
-
-  function setSessionMessages(sessionId: string, messages: ChatMessage[]): void {
-    messagesBySession.value = {
-      ...messagesBySession.value,
-      [sessionId]: [...messages],
-    }
+  let identityVersion = 0
+  const activeSession = computed(() => sessions.value.find(s => s.sessionCode === activeSessionId.value) ?? null)
+  const currentMessages = computed(() => messagesBySession.value[activeSessionId.value ?? ''] ?? [])
+  const historyError = computed(() => historyErrors.value[activeSessionId.value ?? ''] ?? '')
+  const historyReady = computed(() => !!activeSessionId.value && !historyError.value &&
+    Object.prototype.hasOwnProperty.call(messagesBySession.value, activeSessionId.value))
+  function setSessionMessages(code: string, messages: ChatMessage[]): void { messagesBySession.value[code] = messages }
+  function upsert(session: SessionView): void {
+    sessions.value = sort([session, ...sessions.value.filter(s => s.sessionCode !== session.sessionCode)])
   }
-
-  async function loadSessions(): Promise<void> {
-    const response = await chatApi.getSessions()
-    sessions.value = sortSessions(response)
-    const firstSession = sessions.value[0]
-    if (firstSession) {
-      await switchSession(firstSession.sessionCode)
-    } else {
-      activeSessionId.value = null
-      draftMessages.value = []
-    }
-  }
-
-  async function createSession(): Promise<SessionView> {
-    const session = await chatApi.createSession()
-    sessions.value = sortSessions([session, ...sessions.value.filter(item => item.sessionCode !== session.sessionCode)])
-    setSessionMessages(session.sessionCode, [])
-    activeSessionId.value = session.sessionCode
-    pendingSessionTitle.value = ''
-    draftMessages.value = []
-    return session
-  }
-
-  async function switchSession(sessionId: string): Promise<void> {
-    const requestId = ++latestSwitchRequestId
-    const previousSessionId = activeSessionId.value
-    activeSessionId.value = sessionId
-
+  async function refreshSession(code: string): Promise<ChatMessage[]> {
+    const version = identityVersion
     try {
-      const session = await chatApi.getSession(sessionId)
-      if (requestId !== latestSwitchRequestId) return
-
-      const existingMessages = messagesBySession.value[sessionId] ?? []
-      const nextMessages = Array.isArray(session.messages) ? session.messages : existingMessages
-      const hasSession = sessions.value.some(item => item.sessionCode === sessionId)
-
-      sessions.value = hasSession
-        ? sessions.value.map(item => (item.sessionCode === sessionId ? session : item))
-        : sortSessions([session, ...sessions.value])
-
-      setSessionMessages(sessionId, nextMessages)
-      pendingSessionTitle.value = ''
-      draftMessages.value = []
+      const [session, messages] = await Promise.all([api.getSession(code), api.getMessages(code)])
+      if (version !== identityVersion) return []
+      upsert(session)
+      setSessionMessages(code, messages)
+      delete historyErrors.value[code]
+      return messages
     } catch (error) {
-      if (requestId === latestSwitchRequestId) {
-        activeSessionId.value = previousSessionId
-      }
+      if (version === identityVersion) historyErrors.value[code] = (error as Error).message || '会话历史加载失败'
       throw error
     }
   }
-
-  async function deleteSession(sessionId: string): Promise<void> {
-    await chatApi.deleteSession(sessionId)
-    sessions.value = sessions.value.filter(item => item.sessionCode !== sessionId)
-
-    const nextMessages = { ...messagesBySession.value }
-    delete nextMessages[sessionId]
-    messagesBySession.value = nextMessages
-
-    if (activeSessionId.value === sessionId) {
-      activeSessionId.value = sessions.value[0]?.sessionCode ?? null
-      pendingSessionTitle.value = ''
-    }
-
-    if (!activeSessionId.value) {
-      draftMessages.value = []
+  async function switchSession(code: string): Promise<void> {
+    activeSessionId.value = code
+    await refreshSession(code)
+  }
+  async function loadSessions(): Promise<void> {
+    const version = identityVersion
+    const result = await api.getSessions()
+    if (version !== identityVersion) return
+    sessions.value = sort(result)
+    const first = sessions.value[0]
+    if (first) await switchSession(first.sessionCode)
+  }
+  async function createSession(): Promise<SessionView> {
+    const version = identityVersion
+    const session = await api.createSession()
+    if (version !== identityVersion) throw new Error('登录身份已变更')
+    upsert(session)
+    setSessionMessages(session.sessionCode, [])
+    activeSessionId.value = session.sessionCode
+    return session
+  }
+  async function deleteSession(code: string): Promise<void> {
+    const version = identityVersion
+    await api.deleteSession(code)
+    if (version !== identityVersion) return
+    sessions.value = sessions.value.filter(s => s.sessionCode !== code)
+    delete messagesBySession.value[code]
+    delete historyErrors.value[code]
+    if (activeSessionId.value === code) {
+      activeSessionId.value = null
+      if (sessions.value[0]) await switchSession(sessions.value[0].sessionCode)
     }
   }
-
-  async function updateSession(session: SessionView): Promise<SessionView> {
-    const updated = await chatApi.updateSession(session.sessionCode, {
-      title: session.title,
-      modelCode: session.modelCode,
-      systemPrompt: session.systemPrompt,
-      maxRounds: session.maxRounds,
-      status: session.status,
-    })
-
-    sessions.value = sortSessions([
-      updated,
-      ...sessions.value.filter(item => item.sessionCode !== updated.sessionCode),
-    ])
-
-    return updated
+  async function updateSession(code: string, update: SessionUpdate): Promise<void> {
+    const version = identityVersion
+    const session = await api.updateSession(code, update)
+    if (version === identityVersion) upsert(session)
   }
-
-  function startDraftSession(): void {
+  function addUserMessage(content: string, code: string, images: string[]): void {
+    setSessionMessages(code, [...(messagesBySession.value[code] ?? []), { role: 'user', content, images }])
+  }
+  function reset(): void {
+    ++identityVersion
+    sessions.value = []
+    messagesBySession.value = {}
+    historyErrors.value = {}
     activeSessionId.value = null
-    pendingSessionTitle.value = ''
-    draftMessages.value = []
-    streamingSessionId.value = null
-    clearStreamingState()
-  }
-
-  function addUserMessage(content: string, sessionId?: string | null): void {
-    const normalized = content.trim()
-    if (!normalized) return
-
-    const message: ChatMessage = { role: 'user', content: normalized }
-    const targetSessionId = sessionId ?? activeSessionId.value
-
-    if (targetSessionId) {
-      const current = messagesBySession.value[targetSessionId] ?? []
-      setSessionMessages(targetSessionId, [...current, message])
-      return
-    }
-
-    pendingSessionTitle.value = normalized
-    draftMessages.value = [...draftMessages.value, message]
-  }
-
-  function addAssistantMessage(content: string, sessionId?: string | null): void {
-    const normalized = content.trim()
-    if (!normalized) return
-
-    const targetSessionId = sessionId ?? activeSessionId.value
-    if (!targetSessionId) return
-
-    const current = messagesBySession.value[targetSessionId] ?? []
-    setSessionMessages(targetSessionId, [...current, { role: 'assistant', content: normalized }])
-  }
-
-  function bindSessionFromResponse(sessionId: string): void {
-    streamingSessionId.value = sessionId
-    if (!(sessionId in messagesBySession.value)) {
-      setSessionMessages(sessionId, draftMessages.value)
-    }
-    if (!activeSessionId.value) {
-      activeSessionId.value = sessionId
-    }
-    draftMessages.value = []
-  }
-
-  function addStreamingEvent(event: StreamEventMessage): void {
-    streamingEvents.value = [...streamingEvents.value, event]
-  }
-
-  function appendStreamContent(token: string): void {
-    streamContent.value += token
-  }
-
-  function finalizeAssistantMessage(): void {
-    const targetSessionId = streamingSessionId.value ?? activeSessionId.value
-    if (targetSessionId && streamContent.value.trim()) {
-      addAssistantMessage(streamContent.value, targetSessionId)
-    }
-    clearStreamingState()
-  }
-
-  function clearStreamingState(): void {
     isStreaming.value = false
     streamContent.value = ''
     streamingEvents.value = []
-    streamingSessionId.value = null
   }
-
-  return {
-    sessions,
-    messagesBySession,
-    activeSessionId,
-    activeSession,
-    currentMessages,
-    pendingSessionTitle,
-    draftMessages,
-    isStreaming,
-    streamContent,
-    streamingEvents,
-    loadSessions,
-    createSession,
-    switchSession,
-    deleteSession,
-    updateSession,
-    startDraftSession,
-    setSessionMessages,
-    addUserMessage,
-    addAssistantMessage,
-    bindSessionFromResponse,
-    addStreamingEvent,
-    appendStreamContent,
-    finalizeAssistantMessage,
-    clearStreamingState,
-  }
+  return { sessions, messagesBySession, activeSessionId, activeSession, currentMessages, historyError, historyReady, isStreaming,
+    streamContent, streamingEvents, setSessionMessages, refreshSession, switchSession, loadSessions,
+    createSession, deleteSession, updateSession, addUserMessage, reset }
 })

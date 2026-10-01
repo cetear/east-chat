@@ -1,0 +1,164 @@
+{
+  "checkedAt": "2026-09-28T15:06:54.026Z",
+  "base": "http://127.0.0.1:5173",
+  "results": [
+    {
+      "name": "Session detail direct",
+      "method": "GET",
+      "path": "/api/session/399cc667-9f30-4403-bfd6-fdad3be564a2",
+      "direct": true,
+      "status": 400,
+      "contentType": "application/json",
+      "elapsedMs": 103,
+      "body": {
+        "error": "Name for argument of type [java.lang.String] not specified, and parameter name information not available via reflection. Ensure that the compiler uses the '-parameters' flag."
+      }
+    },
+    {
+      "name": "Session detail proxied",
+      "method": "GET",
+      "path": "/api/session/399cc667-9f30-4403-bfd6-fdad3be564a2",
+      "direct": false,
+      "status": 400,
+      "contentType": "application/json",
+      "elapsedMs": 26,
+      "body": {
+        "error": "Name for argument of type [java.lang.String] not specified, and parameter name information not available via reflection. Ensure that the compiler uses the '-parameters' flag."
+      }
+    },
+    {
+      "name": "Session history proxied",
+      "method": "GET",
+      "path": "/api/session/399cc667-9f30-4403-bfd6-fdad3be564a2/messages",
+      "direct": false,
+      "status": 400,
+      "contentType": "application/json",
+      "elapsedMs": 10,
+      "body": {
+        "error": "Name for argument of type [java.lang.String] not specified, and parameter name information not available via reflection. Ensure that the compiler uses the '-parameters' flag."
+      }
+    },
+    {
+      "name": "Model code lookup binding",
+      "method": "GET",
+      "path": "/model/code/codex-missing-model",
+      "direct": false,
+      "status": 400,
+      "contentType": "application/json",
+      "elapsedMs": 11,
+      "body": {
+        "error": "Name for argument of type [java.lang.String] not specified, and parameter name information not available via reflection. Ensure that the compiler uses the '-parameters' flag."
+      }
+    },
+    {
+      "name": "Provider code lookup binding",
+      "method": "GET",
+      "path": "/model/provider/code/codex-missing-provider",
+      "direct": false,
+      "status": 400,
+      "contentType": "application/json",
+      "elapsedMs": 11,
+      "body": {
+        "error": "Name for argument of type [java.lang.String] not specified, and parameter name information not available via reflection. Ensure that the compiler uses the '-parameters' flag."
+      }
+    },
+    {
+      "name": "Route lookup binding",
+      "method": "GET",
+      "path": "/model/provider/codex-missing-provider/models",
+      "direct": false,
+      "status": 400,
+      "contentType": "application/json",
+      "elapsedMs": 11,
+      "body": {
+        "error": "Name for argument of type [java.lang.String] not specified, and parameter name information not available via reflection. Ensure that the compiler uses the '-parameters' flag."
+      }
+    },
+    {
+      "name": "ES info",
+      "method": "GET",
+      "path": "/es/test",
+      "direct": false,
+      "status": 500,
+      "contentType": "application/json",
+      "elapsedMs": 176,
+      "body": {
+        "error": "Request failed"
+      }
+    },
+    {
+      "name": "ES allowed index read",
+      "method": "GET",
+      "path": "/es/getDocuments?index=easychat&size=1",
+      "direct": false,
+      "status": 500,
+      "contentType": "application/json",
+      "elapsedMs": 248,
+      "body": {
+        "error": "Request failed"
+      }
+    },
+    {
+      "name": "ES invalid size validation",
+      "method": "GET",
+      "path": "/es/getDocuments?index=easychat&size=101",
+      "direct": false,
+      "status": 400,
+      "contentType": "application/json",
+      "elapsedMs": 11,
+      "body": {
+        "error": "size must be 1-100"
+      }
+    },
+    {
+      "name": "Knowledge invalid dataset",
+      "method": "GET",
+      "path": "/api/knowledge/docs?dataset=CON",
+      "direct": false,
+      "status": 200,
+      "contentType": "application/json",
+      "elapsedMs": 85,
+      "body": {
+        "code": 200,
+        "message": "success",
+        "data": []
+      }
+    },
+    {
+      "name": "Knowledge missing document status",
+      "method": "GET",
+      "path": "/api/knowledge/docs/codex-check-71aba47c-49cc-4a61-b2f6-e1429666b9a5/status",
+      "direct": false,
+      "status": 404,
+      "contentType": "application/json",
+      "elapsedMs": 86,
+      "body": {
+        "error": "doc not found"
+      }
+    },
+    {
+      "name": "Knowledge empty file",
+      "method": "POST",
+      "path": "/api/knowledge/upload",
+      "direct": false,
+      "status": 400,
+      "contentType": "application/json",
+      "elapsedMs": 35,
+      "body": {
+        "error": "file is required"
+      }
+    },
+    {
+      "name": "Media empty file",
+      "method": "POST",
+      "path": "/api/media/transcribe",
+      "direct": false,
+      "status": 400,
+      "contentType": "application/json",
+      "elapsedMs": 14,
+      "body": {
+        "error": "Media must be 1 byte to 20MB"
+      }
+    }
+  ]
+}

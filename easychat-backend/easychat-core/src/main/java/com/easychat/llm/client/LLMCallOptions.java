@@ -6,6 +6,7 @@ import java.util.List;
 
 @Data
 public class LLMCallOptions {
+    private java.util.function.Consumer<ModelUsage> usageConsumer = value -> {};
     private String modelName;
     private Double temperature;
     private Double topP;

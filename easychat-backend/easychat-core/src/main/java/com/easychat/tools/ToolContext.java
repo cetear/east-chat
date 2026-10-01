@@ -1,0 +1,2 @@
+package com.easychat.tools;
+public record ToolContext(Long sessionId, String dataset, String ownerId) { public ToolContext(Long sessionId,String dataset) {this(sessionId,dataset,"demo");} public ToolContext {if(ownerId==null) ownerId="demo";} }

@@ -1,0 +1,98 @@
+{
+  "checkedAt": "2026-09-28T10:12:22.364Z",
+  "base": "http://127.0.0.1:5173",
+  "results": [
+    {
+      "name": "Same-origin model catalog",
+      "passed": true,
+      "detail": {
+        "models": 0
+      }
+    },
+    {
+      "name": "Session creation without body",
+      "passed": true,
+      "detail": {
+        "sessionCode": "399cc667-9f30-4403-bfd6-fdad3be564a2",
+        "status": 1,
+        "maxRounds": 10
+      }
+    },
+    {
+      "name": "Session partial update and GET",
+      "passed": false,
+      "error": "Expected values to be strictly equal:\n\n400 !== 200\n"
+    },
+    {
+      "name": "Session included in user listing",
+      "passed": true,
+      "detail": {
+        "sessionCount": 1
+      }
+    },
+    {
+      "name": "Dedicated history returns array",
+      "passed": false,
+      "error": "Expected values to be strictly equal:\n\n400 !== 200\n"
+    },
+    {
+      "name": "maxRounds accepts 100, rejects 101",
+      "passed": false,
+      "error": "Expected values to be strictly equal:\n\n400 !== 200\n"
+    },
+    {
+      "name": "Clear prompt/title with empty strings",
+      "passed": false,
+      "error": "Expected values to be strictly equal:\n\n400 !== 200\n"
+    },
+    {
+      "name": "Closed session prevents chat",
+      "passed": false,
+      "error": "Expected values to be strictly equal:\n\n400 !== 200\n"
+    },
+    {
+      "name": "Unknown model returns explicit chat failure",
+      "passed": true,
+      "detail": {
+        "error": "Model does not exist"
+      }
+    },
+    {
+      "name": "Stream request handles pre-stream validation failure",
+      "passed": true,
+      "detail": {
+        "terminalError": true,
+        "body": "event:error\ndata:Model does not exist\n\n"
+      }
+    },
+    {
+      "name": "Admin model/provider/ops read through proxy",
+      "passed": true,
+      "detail": {
+        "modelCount": 0,
+        "providerCount": 0,
+        "database": "up",
+        "esEnabled": true
+      }
+    },
+    {
+      "name": "Knowledge list all/default through proxy",
+      "passed": true
+    },
+    {
+      "name": "ES connection health",
+      "passed": false,
+      "error": "{\"status\":500,\"data\":{\"error\":\"Request failed\"},\"contentType\":\"application/json\"}\n\n500 !== 200\n"
+    },
+    {
+      "name": "Delete only created test session returns 204",
+      "passed": false,
+      "error": "Expected values to be strictly equal:\n\n400 !== 204\n"
+    },
+    {
+      "name": "Deleted test session returns 404",
+      "passed": false,
+      "error": "Expected values to be strictly equal:\n\n400 !== 404\n"
+    }
+  ]
+}
